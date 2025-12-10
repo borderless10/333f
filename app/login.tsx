@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -28,10 +29,28 @@ export default function LoginScreen() {
 
     setLoading(true);
     setError(null);
-    setTimeout(() => {
+
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      });
+
+      if (authError) {
+        setError(authError.message || 'Erro ao fazer login. Verifique suas credenciais.');
+        setLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        console.log('✅ Login bem-sucedido:', data.user.email);
+        router.replace('/(tabs)');
+      }
+    } catch (err) {
+      console.error('❌ Erro inesperado no login:', err);
+      setError('Erro inesperado. Tente novamente.');
       setLoading(false);
-      router.replace('/(tabs)');
-    }, 800);
+    }
   };
 
   return (
@@ -52,7 +71,7 @@ export default function LoginScreen() {
             <View style={styles.formHeader}>
               <ThemedText type="subtitle">Acesse sua conta</ThemedText>
               <ThemedText style={[styles.formCaption, { color: colors.textSecondary }]}>
-                Os dados ficam armazenados localmente por enquanto.
+                Faça login para acessar sua conta.
               </ThemedText>
             </View>
 
