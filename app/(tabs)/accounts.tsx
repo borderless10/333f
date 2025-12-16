@@ -180,17 +180,6 @@ export default function AccountsScreen() {
           </ThemedText>
         </View>
 
-        <GlassContainer style={styles.summaryCard}>
-          <View style={styles.summaryContent}>
-            <Text style={styles.summaryLabel}>
-              Total de Contas
-            </Text>
-            <Text style={styles.summaryAmount}>
-              {contas.length}
-            </Text>
-          </View>
-        </GlassContainer>
-
         <View style={styles.accountsList}>
           {contas.map((conta) => (
             <GlassContainer key={conta.id} style={styles.accountCard}>
@@ -388,24 +377,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
     color: 'rgba(255, 255, 255, 0.8)',
-  },
-  summaryCard: {
-    padding: 20,
-    marginBottom: 24,
-    alignItems: 'center',
-  },
-  summaryContent: {
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 14,
-    marginBottom: 8,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  summaryAmount: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#00b09b',
   },
   accountsList: {
     gap: 16,
