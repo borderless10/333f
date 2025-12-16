@@ -1,9 +1,7 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Card } from './ui/card';
+import { StyleSheet, Text, View } from 'react-native';
+import { GlassContainer } from './glass-container';
 import { ThemedText } from './themed-text';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
 import { IconSymbol } from './ui/icon-symbol';
 
 export type FinancialCardProps = {
@@ -18,24 +16,21 @@ export type FinancialCardProps = {
 };
 
 export function FinancialCard({ title, amount, type, icon, trend }: FinancialCardProps) {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
-
   const getTypeColor = () => {
     switch (type) {
       case 'income':
-        return colors.success;
+        return '#10B981';
       case 'expense':
-        return colors.danger;
+        return '#EF4444';
       case 'balance':
-        return colors.primary;
+        return '#00b09b';
       default:
-        return colors.text;
+        return '#FFFFFF';
     }
   };
 
-  const getIconName = () => {
-    if (icon) return icon;
+  const getIconName = (): 'arrow.down.circle.fill' | 'arrow.up.circle.fill' | 'dollarsign.circle.fill' | 'circle.fill' => {
+    if (icon) return icon as any;
     switch (type) {
       case 'income':
         return 'arrow.down.circle.fill';
@@ -49,37 +44,37 @@ export function FinancialCard({ title, amount, type, icon, trend }: FinancialCar
   };
 
   return (
-    <Card style={styles.card}>
+    <GlassContainer style={styles.card}>
       <View style={styles.header}>
         <View style={[styles.iconContainer, { backgroundColor: getTypeColor() + '20' }]}>
           <IconSymbol name={getIconName()} size={24} color={getTypeColor()} />
         </View>
-        <ThemedText style={[styles.title, { color: colors.textSecondary }]} type="defaultSemiBold">
+        <ThemedText style={styles.title} type="defaultSemiBold">
           {title}
         </ThemedText>
       </View>
       
-      <ThemedText style={[styles.amount, { color: colors.text }]} type="title">
+      <Text style={[styles.amount, { color: '#FFFFFF' }]}>
         {amount}
-      </ThemedText>
+      </Text>
 
       {trend && (
         <View style={styles.trend}>
           <IconSymbol
             name={trend.isPositive ? 'arrow.up.right' : 'arrow.down.right'}
             size={14}
-            color={trend.isPositive ? colors.success : colors.danger}
+            color={trend.isPositive ? '#10B981' : '#EF4444'}
           />
-          <ThemedText
+          <Text
             style={[
               styles.trendText,
-              { color: trend.isPositive ? colors.success : colors.danger },
+              { color: trend.isPositive ? '#10B981' : '#EF4444' },
             ]}>
             {trend.value}
-          </ThemedText>
+          </Text>
         </View>
       )}
-    </Card>
+    </GlassContainer>
   );
 }
 
@@ -87,6 +82,7 @@ const styles = StyleSheet.create({
   card: {
     minWidth: 160,
     marginRight: 12,
+    padding: 16,
   },
   header: {
     flexDirection: 'row',
@@ -104,9 +100,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 14,
     flex: 1,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   amount: {
     fontSize: 24,
+    fontWeight: '700',
     marginBottom: 8,
   },
   trend: {
@@ -119,8 +117,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
-
-
-
-

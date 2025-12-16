@@ -1,23 +1,20 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ThemedView } from '@/components/themed-view';
+import { AnimatedBackground } from '@/components/animated-background';
+import { GlassContainer } from '@/components/glass-container';
 import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
 export default function UserScreen() {
   const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   useEffect(() => {
     // Buscar usuário atual
@@ -47,11 +44,13 @@ export default function UserScreen() {
 
   const handleLogout = async () => {
     console.log('🚪 Iniciando logout...');
+    setLogoutLoading(true);
     try {
       const { error } = await supabase.auth.signOut();
       
       if (error) {
         console.error('❌ Erro ao fazer logout:', error.message);
+        setLogoutLoading(false);
         return;
       }
 
@@ -59,6 +58,7 @@ export default function UserScreen() {
       router.replace('/login');
     } catch (err) {
       console.error('💥 Erro inesperado no logout:', err);
+      setLogoutLoading(false);
     }
   };
 
@@ -67,13 +67,14 @@ export default function UserScreen() {
   const passwordMasked = '••••••••';
 
   const userFields = [
-    { label: 'Usuário', value: userName },
-    { label: 'Email', value: userEmail },
-    { label: 'Senha', value: passwordMasked },
+    { label: 'Usuário', value: userName, icon: 'person' },
+    { label: 'Email', value: userEmail, icon: 'email' },
+    { label: 'Senha', value: passwordMasked, icon: 'lock' },
   ];
 
   return (
-    <ThemedView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
+      <AnimatedBackground />
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -81,36 +82,59 @@ export default function UserScreen() {
             paddingTop: insets.top + 16,
             paddingBottom: insets.bottom + 24,
           },
-        ]}>
+        ]}
+        showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
         <ThemedText type="title" style={styles.title}>
           Usuário
         </ThemedText>
-        <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Gerencie suas informações pessoais
-        </ThemedText>
+        </View>
 
-        <Card style={styles.card} variant="elevated">
-          {userFields.map((field) => (
-            <View key={field.label} style={styles.fieldRow}>
-              <ThemedText type="defaultSemiBold" style={styles.fieldLabel}>
+        {/* User Info Card com Glassmorphism */}
+        <GlassContainer style={styles.glassCard}>
+          <View style={styles.cardContent}>
+            {userFields.map((field, index) => (
+              <View key={field.label}>
+                <View style={styles.fieldRow}>
+                  <View style={styles.fieldLeft}>
+                    <MaterialIcons 
+                      name={field.icon as any} 
+                      size={20} 
+                      color="#00b09b" 
+                      style={styles.fieldIcon}
+                    />
+                    <ThemedText style={styles.fieldLabel} type="defaultSemiBold">
                 {field.label}
               </ThemedText>
-              <ThemedText style={[styles.fieldValue, { color: colors.text }]}>{field.value}</ThemedText>
+                  </View>
+                  <ThemedText style={styles.fieldValue}>
+                    {field.value}
+                  </ThemedText>
+                </View>
+                {index < userFields.length - 1 && <View style={styles.fieldDivider} />}
             </View>
           ))}
-        </Card>
+          </View>
+        </GlassContainer>
 
-        <View style={styles.actions}>
-          <Button
-            title="Logout"
-            style={styles.logoutButton}
-            variant="outline"
+        {/* Logout Button */}
+        <TouchableOpacity
+          style={[styles.logoutButton, logoutLoading && styles.logoutButtonDisabled]}
             onPress={handleLogout}
-            disabled={loading}
-          />
-        </View>
+          disabled={logoutLoading || loading}
+          activeOpacity={0.8}>
+          {logoutLoading ? (
+            <Text style={styles.logoutButtonText}>Saindo...</Text>
+          ) : (
+            <>
+              <MaterialIcons name="logout" size={20} color="#FFFFFF" />
+              <Text style={styles.logoutButtonText}>Logout</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -119,33 +143,68 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 20,
-    gap: 16,
+    paddingHorizontal: 24,
+    gap: 32,
+  },
+  header: {
+    marginBottom: 8,
   },
   title: {
-    marginBottom: 4,
+    color: '#FFFFFF',
   },
-  subtitle: {
-    marginBottom: 16,
+  glassCard: {
+    padding: 24,
   },
-  card: {
-    padding: 20,
-    gap: 20,
+  cardContent: {
+    gap: 16,
   },
   fieldRow: {
-    gap: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  fieldLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  fieldIcon: {
+    // Ícone já tem tamanho definido
   },
   fieldLabel: {
     fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   fieldValue: {
-    fontSize: 18,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'right',
   },
-  actions: {
-    gap: 12,
+  fieldDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     marginTop: 16,
   },
-  logoutButton: {},
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#00b09b',
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  logoutButtonDisabled: {
+    opacity: 0.6,
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
 });
-
-

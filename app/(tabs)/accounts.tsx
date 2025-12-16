@@ -1,16 +1,12 @@
-import React from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemedView } from '@/components/themed-view';
+import { AnimatedBackground } from '@/components/animated-background';
+import { GlassContainer } from '@/components/glass-container';
 import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/card';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import React from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function AccountsScreen() {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
 
   // Dados mockados - serão substituídos pela API
@@ -47,64 +43,72 @@ export default function AccountsScreen() {
   };
 
   return (
-    <ThemedView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}>
-        <ThemedView style={styles.header}>
-          <ThemedText type="title">Contas Bancárias</ThemedText>
-          <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
+    <View style={styles.container}>
+      <AnimatedBackground />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <ThemedText type="title" style={styles.title}>Contas Bancárias</ThemedText>
+          <ThemedText style={styles.subtitle}>
             {accounts.length} conta{accounts.length !== 1 ? 's' : ''} conectada{accounts.length !== 1 ? 's' : ''}
           </ThemedText>
-        </ThemedView>
+        </View>
 
-        <ThemedView style={styles.summaryCard}>
-          <ThemedText style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+        <GlassContainer style={styles.summaryCard}>
+          <View style={styles.summaryContent}>
+            <Text style={styles.summaryLabel}>
             Saldo Total
-          </ThemedText>
-          <ThemedText type="title" style={[styles.summaryAmount, { color: colors.primary }]}>
+            </Text>
+            <Text style={styles.summaryAmount}>
             R$ 245.890,50
-          </ThemedText>
-        </ThemedView>
+            </Text>
+          </View>
+        </GlassContainer>
 
-        <ThemedView style={styles.accountsList}>
+        <View style={styles.accountsList}>
           {accounts.map((account) => (
-            <Card key={account.id} style={styles.accountCard} variant="elevated">
+            <GlassContainer key={account.id} style={styles.accountCard}>
               <View style={styles.accountHeader}>
-                <View style={[styles.bankIcon, { backgroundColor: colors.primary + '20' }]}>
-                  <IconSymbol name={getBankIcon(account.bankCode)} size={24} color={colors.primary} />
+                <View style={styles.bankIcon}>
+                  <IconSymbol name="building.columns.fill" size={24} color="#00b09b" />
                 </View>
                 <View style={styles.accountInfo}>
-                  <ThemedText type="defaultSemiBold">{account.name}</ThemedText>
-                  <ThemedText style={[styles.accountType, { color: colors.textSecondary }]}>
+                  <ThemedText type="defaultSemiBold" style={styles.accountName}>
+                    {account.name}
+                  </ThemedText>
+                  <ThemedText style={styles.accountType}>
                     {account.type} • {account.accountNumber}
                   </ThemedText>
                 </View>
               </View>
               <View style={styles.accountBalance}>
-                <ThemedText style={[styles.balanceLabel, { color: colors.textSecondary }]}>
+                <Text style={styles.balanceLabel}>
                   Saldo disponível
-                </ThemedText>
-                <ThemedText type="subtitle" style={styles.balanceAmount}>
+                </Text>
+                <Text style={styles.balanceAmount}>
                   {account.balance}
-                </ThemedText>
+                </Text>
               </View>
-            </Card>
+            </GlassContainer>
           ))}
-        </ThemedView>
+        </View>
 
         <TouchableOpacity
-          style={[styles.addAccountCard, { borderColor: colors.primary, borderWidth: 2, borderStyle: 'dashed' }]}
+          style={styles.addAccountCard}
           onPress={() => {
             // Navegar para adicionar conta
             console.log('Adicionar nova conta');
           }}
           activeOpacity={0.7}>
-          <IconSymbol name="plus.circle.fill" size={32} color={colors.primary} />
-          <ThemedText style={[styles.addAccountText, { color: colors.primary }]} type="defaultSemiBold">
+          <IconSymbol name="plus.circle.fill" size={32} color="#00b09b" />
+          <Text style={styles.addAccountText}>
             Conectar Nova Conta
-          </ThemedText>
+          </Text>
         </TouchableOpacity>
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -121,28 +125,31 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 24,
   },
+  title: {
+    color: '#FFFFFF',
+  },
   subtitle: {
     fontSize: 14,
     marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   summaryCard: {
-    backgroundColor: '#FFFFFF',
     padding: 20,
-    borderRadius: 12,
     marginBottom: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+  },
+  summaryContent: {
+    alignItems: 'center',
   },
   summaryLabel: {
     fontSize: 14,
     marginBottom: 8,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   summaryAmount: {
     fontSize: 32,
+    fontWeight: '700',
+    color: '#00b09b',
   },
   accountsList: {
     gap: 16,
@@ -163,25 +170,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    backgroundColor: 'rgba(0, 176, 155, 0.2)',
   },
   accountInfo: {
     flex: 1,
   },
+  accountName: {
+    color: '#FFFFFF',
+  },
   accountType: {
     fontSize: 12,
     marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.6)',
   },
   accountBalance: {
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
     paddingTop: 16,
   },
   balanceLabel: {
     fontSize: 12,
     marginBottom: 4,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   balanceAmount: {
     fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   addAccountCard: {
     padding: 24,
@@ -190,10 +205,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 12,
     backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#00b09b',
+    borderStyle: 'dashed',
   },
   addAccountText: {
     marginTop: 12,
     fontSize: 16,
+    fontWeight: '600',
+    color: '#00b09b',
   },
 });
-

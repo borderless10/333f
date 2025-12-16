@@ -1,24 +1,30 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AnimatedBackground } from '@/components/animated-background';
+import { GlassContainer } from '@/components/glass-container';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { PasswordInput } from '@/components/ui/password-input';
 import { supabase } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
 
   const handleLogin = async () => {
@@ -53,64 +59,132 @@ export default function LoginScreen() {
     }
   };
 
+  const handleSocialLogin = (provider: 'google' | 'microsoft') => {
+    console.log(`Login com ${provider}`);
+    // Implementar login social depois
+  };
+
   return (
+    <View style={styles.container}>
+      <AnimatedBackground />
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
+        style={styles.keyboardView}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top }]}
-        keyboardShouldPersistTaps="handled">
-        <ThemedView style={styles.content}>
-          <ThemedView style={styles.hero}>
+          contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 40 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <View style={styles.content}>
+            {/* Logo e Título */}
+            <View style={styles.hero}>
+              <View style={styles.logoContainer}>
+                <MaterialIcons name="apartment" size={40} color="#00b09b" style={styles.logoIcon} />
             <ThemedText type="title" style={styles.logo}>
               Télos Control
             </ThemedText>
-          </ThemedView>
-
-          <Card style={styles.card} variant="elevated">
-            <View style={styles.formHeader}>
-              <ThemedText type="subtitle">Acesse sua conta</ThemedText>
-              <ThemedText style={[styles.formCaption, { color: colors.textSecondary }]}>
-                Faça login para acessar sua conta.
-              </ThemedText>
+              </View>
+              <View style={styles.divider} />
+              <ThemedText style={styles.subtitle}>Sistema de controle financeiro</ThemedText>
             </View>
 
-            <Input
-              label="E-mail"
+            {/* Form Container com Glassmorphism */}
+            <GlassContainer style={styles.glassCard}>
+              <View style={styles.formContent}>
+                {/* Email Input */}
+                <View style={styles.inputContainer}>
+                  <ThemedText style={styles.inputLabel} type="defaultSemiBold">
+                    Email
+                  </ThemedText>
+                  <TextInput
+                    style={styles.input}
               placeholder="seu@email.com"
+                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
             />
+                </View>
 
-            <Input
+                {/* Password Input */}
+                <PasswordInput
               label="Senha"
               placeholder="••••••••"
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
               autoCapitalize="none"
               autoComplete="password"
             />
 
-            {error && (
-              <ThemedText style={[styles.error, { color: colors.danger }]}>
-                {error}
-              </ThemedText>
-            )}
+                {/* Remember Me */}
+                <TouchableOpacity
+                  style={styles.rememberMe}
+                  onPress={() => setRememberMe(!rememberMe)}
+                  activeOpacity={0.7}>
+                  <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                    {rememberMe && <MaterialIcons name="check" size={16} color="#00b09b" />}
+                  </View>
+                  <Text style={styles.rememberMeText}>Lembrar de mim</Text>
+                </TouchableOpacity>
 
-            <Button
-              title="Entrar"
-              onPress={handleLogin}
-              loading={loading}
-              style={styles.loginButton}
-            />
-          </Card>
-        </ThemedView>
+                {/* Error Message */}
+                {error && <Text style={styles.error}>{error}</Text>}
+
+                {/* Login Button */}
+                <TouchableOpacity
+                  style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+                  onPress={handleLogin}
+                  disabled={loading}
+                  activeOpacity={0.8}>
+                  {loading ? (
+                    <Text style={styles.loginButtonText}>Carregando...</Text>
+                  ) : (
+                    <Text style={styles.loginButtonText}>Entrar</Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Forgot Password */}
+                <TouchableOpacity style={styles.forgotPassword} activeOpacity={0.7}>
+                  <Text style={styles.forgotPasswordText}>Esqueceu sua senha?</Text>
+                </TouchableOpacity>
+
+                {/* Separator */}
+                <View style={styles.separator}>
+                  <View style={styles.separatorLine} />
+                  <Text style={styles.separatorText}>ou continue com</Text>
+                  <View style={styles.separatorLine} />
+                </View>
+
+                {/* Social Login Buttons */}
+                <View style={styles.socialButtons}>
+                  <TouchableOpacity
+                    style={styles.socialButton}
+                    onPress={() => handleSocialLogin('google')}
+                    activeOpacity={0.7}>
+                    <MaterialIcons name="email" size={20} color="#FFFFFF" />
+                    <Text style={styles.socialButtonText}>Google</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.socialButton}
+                    onPress={() => handleSocialLogin('microsoft')}
+                    activeOpacity={0.7}>
+                    <View style={styles.microsoftLogo}>
+                      <View style={[styles.microsoftSquare, { backgroundColor: '#F25022' }]} />
+                      <View style={[styles.microsoftSquare, { backgroundColor: '#7FBA00' }]} />
+                      <View style={[styles.microsoftSquare, { backgroundColor: '#00A4EF' }]} />
+                      <View style={[styles.microsoftSquare, { backgroundColor: '#FFB900' }]} />
+                    </View>
+                    <Text style={styles.socialButtonText}>Microsoft</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </GlassContainer>
+          </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -118,38 +192,166 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  keyboardView: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
+    paddingBottom: 40,
   },
   content: {
-    padding: 24,
-    gap: 24,
+    paddingHorizontal: 24,
+    gap: 32,
   },
   hero: {
+    alignItems: 'center',
     gap: 12,
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoIcon: {
+    // Ícone de prédio já tem tamanho definido no MaterialIcons
   },
   logo: {
     fontSize: 32,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  divider: {
+    width: 60,
+    height: 2,
+    backgroundColor: '#00b09b',
+    marginVertical: 8,
   },
   subtitle: {
     fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
   },
-  card: {
-    padding: 20,
+  glassCard: {
+    padding: 24,
+  },
+  formContent: {
     gap: 16,
   },
-  loginButton: {
-    marginTop: 8,
+  inputContainer: {
+    marginBottom: 16,
   },
-  formHeader: {
-    gap: 4,
-  },
-  formCaption: {
+  inputLabel: {
+    marginBottom: 8,
     fontSize: 14,
+    color: '#FFFFFF',
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    color: '#FFFFFF',
+  },
+  rememberMe: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: 'rgba(0, 176, 155, 0.2)',
+    borderColor: '#00b09b',
+  },
+  rememberMeText: {
+    fontSize: 14,
+    color: '#FFFFFF',
   },
   error: {
     fontSize: 14,
+    color: '#EF4444',
+    marginTop: 4,
+  },
+  loginButton: {
+    backgroundColor: '#00b09b',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  forgotPassword: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: '#00b09b',
+  },
+  separator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+    gap: 12,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  separatorText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  socialButtons: {
+    gap: 12,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  socialButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+  },
+  microsoftLogo: {
+    width: 20,
+    height: 20,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  microsoftSquare: {
+    width: 9,
+    height: 9,
+    margin: 0.5,
   },
 });
-

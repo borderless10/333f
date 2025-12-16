@@ -1,18 +1,14 @@
-import React from 'react';
-import { StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
+import { AnimatedBackground } from '@/components/animated-background';
 import { FinancialCard } from '@/components/financial-card';
-import { Card } from '@/components/ui/card';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
+import { GlassContainer } from '@/components/glass-container';
+import { ThemedText } from '@/components/themed-text';
 import { router } from 'expo-router';
+import React from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
 
   const onRefresh = React.useCallback(() => {
@@ -35,21 +31,23 @@ export default function DashboardScreen() {
   ];
 
   return (
-    <ThemedView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
+      <AnimatedBackground />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}>
         
         {/* Header */}
-        <ThemedView style={styles.header}>
+        <View style={styles.header}>
           <ThemedText type="title" style={styles.greeting}>
             Olá, Empresa
           </ThemedText>
-          <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
+          <ThemedText style={styles.subtitle}>
             Resumo financeiro
           </ThemedText>
-        </ThemedView>
+        </View>
 
         {/* Financial Cards */}
         <ScrollView
@@ -78,88 +76,95 @@ export default function DashboardScreen() {
         </ScrollView>
 
         {/* Recent Transactions */}
-        <ThemedView style={styles.section}>
-          <ThemedView style={styles.sectionHeader}>
-            <ThemedText type="subtitle">Transações Recentes</ThemedText>
-            <ThemedText
-              style={[styles.seeAll, { color: colors.primary }]}
-              onPress={() => router.push('/(tabs)/transactions')}>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>Transações Recentes</ThemedText>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/transactions')} activeOpacity={0.7}>
+              <Text style={styles.seeAll}>
               Ver todas
-            </ThemedText>
-          </ThemedView>
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-          <Card style={styles.transactionsCard}>
-            {recentTransactions.map((transaction) => (
+          <GlassContainer style={styles.transactionsCard}>
+            {recentTransactions.map((transaction, index) => (
               <TouchableOpacity
                 key={transaction.id}
-                style={styles.transactionItem}
+                style={[
+                  styles.transactionItem,
+                  index < recentTransactions.length - 1 && styles.transactionItemBorder
+                ]}
                 onPress={() => router.push('/(tabs)/transactions')}
                 activeOpacity={0.7}>
-                <ThemedView style={styles.transactionLeft}>
-                  <ThemedView
+                <View style={styles.transactionLeft}>
+                  <View
                     style={[
                       styles.transactionIcon,
                       {
                         backgroundColor:
                           transaction.type === 'income'
-                            ? colors.success + '20'
-                            : colors.danger + '20',
+                            ? 'rgba(16, 185, 129, 0.2)'
+                            : 'rgba(239, 68, 68, 0.2)',
                       },
                     ]}>
-                    <ThemedText
+                    <Text
                       style={{
-                        color: transaction.type === 'income' ? colors.success : colors.danger,
+                        color: transaction.type === 'income' ? '#10B981' : '#EF4444',
                         fontSize: 18,
                         fontWeight: 'bold',
                       }}>
                       {transaction.type === 'income' ? '+' : '-'}
+                    </Text>
+                  </View>
+                  <View style={styles.transactionInfo}>
+                    <ThemedText type="defaultSemiBold" style={styles.transactionDescription}>
+                      {transaction.description}
                     </ThemedText>
-                  </ThemedView>
-                  <ThemedView style={styles.transactionInfo}>
-                    <ThemedText type="defaultSemiBold">{transaction.description}</ThemedText>
-                    <ThemedText style={[styles.transactionDate, { color: colors.textSecondary }]}>
+                    <ThemedText style={styles.transactionDate}>
                       {transaction.date}
                     </ThemedText>
-                  </ThemedView>
-                </ThemedView>
-                <ThemedText
+                  </View>
+                </View>
+                <Text
                   style={[
                     styles.transactionAmount,
                     {
-                      color: transaction.type === 'income' ? colors.success : colors.danger,
+                      color: transaction.type === 'income' ? '#10B981' : '#EF4444',
                     },
                   ]}>
                   {transaction.amount}
-                </ThemedText>
+                </Text>
               </TouchableOpacity>
             ))}
-          </Card>
-        </ThemedView>
+          </GlassContainer>
+        </View>
 
         {/* Quick Actions */}
-        <ThemedView style={styles.section}>
+        <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>
             Ações Rápidas
           </ThemedText>
-          <ThemedView style={styles.quickActions}>
-            <Card
-              style={[styles.actionCard, { backgroundColor: colors.primary }]}
-              onTouchEnd={() => router.push('/(tabs)/accounts')}>
-              <ThemedText style={[styles.actionText, { color: '#FFFFFF' }]} type="defaultSemiBold">
+          <View style={styles.quickActions}>
+            <TouchableOpacity
+              style={[styles.actionCard, styles.actionCardPrimary]}
+              onPress={() => router.push('/(tabs)/accounts')}
+              activeOpacity={0.8}>
+              <Text style={styles.actionText}>
                 Contas Bancárias
-              </ThemedText>
-            </Card>
-            <Card
-              style={[styles.actionCard, { backgroundColor: colors.success }]}
-              onTouchEnd={() => router.push('/(tabs)/transactions')}>
-              <ThemedText style={[styles.actionText, { color: '#FFFFFF' }]} type="defaultSemiBold">
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionCard, styles.actionCardSuccess]}
+              onPress={() => router.push('/(tabs)/transactions')}
+              activeOpacity={0.8}>
+              <Text style={styles.actionText}>
                 Nova Transação
-              </ThemedText>
-            </Card>
-          </ThemedView>
-        </ThemedView>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -178,9 +183,11 @@ const styles = StyleSheet.create({
   },
   greeting: {
     marginBottom: 4,
+    color: '#FFFFFF',
   },
   subtitle: {
     fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   cardsContainer: {
     marginBottom: 24,
@@ -198,11 +205,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    marginBottom: 12,
+    color: '#FFFFFF',
   },
   seeAll: {
     fontSize: 14,
     fontWeight: '600',
+    color: '#00b09b',
   },
   transactionsCard: {
     padding: 0,
@@ -213,8 +221,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+  },
+  transactionItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   transactionLeft: {
     flexDirection: 'row',
@@ -232,9 +242,13 @@ const styles = StyleSheet.create({
   transactionInfo: {
     flex: 1,
   },
+  transactionDescription: {
+    color: '#FFFFFF',
+  },
   transactionDate: {
     fontSize: 12,
     marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.6)',
   },
   transactionAmount: {
     fontSize: 16,
@@ -250,9 +264,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 80,
+    borderRadius: 12,
+  },
+  actionCardPrimary: {
+    backgroundColor: '#00b09b',
+  },
+  actionCardSuccess: {
+    backgroundColor: '#10B981',
   },
   actionText: {
     fontSize: 14,
+    fontWeight: '600',
     textAlign: 'center',
+    color: '#FFFFFF',
   },
 });

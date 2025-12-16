@@ -1,19 +1,15 @@
-import React, { useState } from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemedView } from '@/components/themed-view';
+import { AnimatedBackground } from '@/components/animated-background';
+import { GlassContainer } from '@/components/glass-container';
 import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/card';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type FilterType = 'all' | 'income' | 'expense';
 
 export default function TransactionsScreen() {
   const [filter, setFilter] = useState<FilterType>('all');
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
 
   // Dados mockados - serão substituídos pela API
@@ -103,31 +99,31 @@ export default function TransactionsScreen() {
       <TouchableOpacity
         style={[
           styles.filterButton,
-          isActive && { backgroundColor: colors.primary },
-          !isActive && { backgroundColor: colors.surfaceSecondary },
+          isActive && styles.filterButtonActive,
+          !isActive && styles.filterButtonInactive,
         ]}
-        onPress={() => setFilter(type)}>
-        <ThemedText
-          style={[
-            styles.filterText,
-            isActive && { color: '#FFFFFF' },
-            !isActive && { color: colors.text },
-          ]}>
+        onPress={() => setFilter(type)}
+        activeOpacity={0.7}>
+        <Text style={[styles.filterText, isActive && styles.filterTextActive, !isActive && styles.filterTextInactive]}>
           {label}
-        </ThemedText>
+        </Text>
       </TouchableOpacity>
     );
   };
 
   return (
-    <ThemedView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}>
-        <ThemedView style={styles.header}>
-          <ThemedText type="title">Transações</ThemedText>
-          <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
+    <View style={styles.container}>
+      <AnimatedBackground />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <ThemedText type="title" style={styles.title}>Transações</ThemedText>
+          <ThemedText style={styles.subtitle}>
             Histórico completo de movimentações
           </ThemedText>
-        </ThemedView>
+        </View>
 
         {/* Filters */}
         <View style={styles.filters}>
@@ -137,51 +133,53 @@ export default function TransactionsScreen() {
         </View>
 
         {/* Transactions List */}
-        <ThemedView style={styles.transactionsList}>
+        <View style={styles.transactionsList}>
           {filteredTransactions.map((transaction) => (
-            <Card key={transaction.id} style={styles.transactionCard}>
+            <GlassContainer key={transaction.id} style={styles.transactionCard}>
               <View style={styles.transactionHeader}>
                 <View
                   style={[
                     styles.transactionIcon,
                     {
                       backgroundColor:
-                        transaction.type === 'income' ? colors.success + '20' : colors.danger + '20',
+                        transaction.type === 'income' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
                     },
                   ]}>
                   <IconSymbol
                     name={transaction.type === 'income' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'}
                     size={20}
-                    color={transaction.type === 'income' ? colors.success : colors.danger}
+                    color={transaction.type === 'income' ? '#10B981' : '#EF4444'}
                   />
                 </View>
                 <View style={styles.transactionInfo}>
-                  <ThemedText type="defaultSemiBold">{transaction.description}</ThemedText>
-                  <ThemedText style={[styles.transactionMeta, { color: colors.textSecondary }]}>
+                  <ThemedText type="defaultSemiBold" style={styles.transactionDescription}>
+                    {transaction.description}
+                  </ThemedText>
+                  <ThemedText style={styles.transactionMeta}>
                     {transaction.category} • {transaction.account}
                   </ThemedText>
                 </View>
                 <View style={styles.transactionAmount}>
-                  <ThemedText
+                  <Text
                     style={[
                       styles.amountText,
                       {
-                        color: transaction.type === 'income' ? colors.success : colors.danger,
+                        color: transaction.type === 'income' ? '#10B981' : '#EF4444',
                       },
                     ]}>
                     {transaction.type === 'income' ? '+' : ''}
                     {formatAmount(transaction.amount)}
-                  </ThemedText>
-                  <ThemedText style={[styles.transactionDate, { color: colors.textSecondary }]}>
+                  </Text>
+                  <ThemedText style={styles.transactionDate}>
                     {formatDate(transaction.date)}
                   </ThemedText>
                 </View>
               </View>
-            </Card>
+            </GlassContainer>
           ))}
-        </ThemedView>
+        </View>
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -198,9 +196,13 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 24,
   },
+  title: {
+    color: '#FFFFFF',
+  },
   subtitle: {
     fontSize: 14,
     marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   filters: {
     flexDirection: 'row',
@@ -211,12 +213,24 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: '#00b09b',
+  },
+  filterButtonInactive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   filterText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  filterTextActive: {
+    color: '#FFFFFF',
+  },
+  filterTextInactive: {
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   transactionsList: {
     gap: 12,
@@ -239,9 +253,13 @@ const styles = StyleSheet.create({
   transactionInfo: {
     flex: 1,
   },
+  transactionDescription: {
+    color: '#FFFFFF',
+  },
   transactionMeta: {
     fontSize: 12,
     marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.6)',
   },
   transactionAmount: {
     alignItems: 'flex-end',
@@ -253,6 +271,6 @@ const styles = StyleSheet.create({
   transactionDate: {
     fontSize: 12,
     marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.6)',
   },
 });
-
