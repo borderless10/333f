@@ -77,19 +77,80 @@ export default function AccountsScreen() {
     setEditingConta(null);
   };
 
+  // Função auxiliar para validar se é número
+  const validarNumero = (valor: string, nomeCampo: string): { valido: boolean; mensagem?: string } => {
+    if (!valor || valor.trim() === '') {
+      return { valido: false, mensagem: `O campo "${nomeCampo}" é obrigatório.` };
+    }
+    
+    const numero = parseInt(valor.trim());
+    if (isNaN(numero) || numero <= 0) {
+      return { valido: false, mensagem: `O campo "${nomeCampo}" deve ser um número válido maior que zero.` };
+    }
+    
+    return { valido: true };
+  };
+
   const validarFormulario = (): boolean => {
+    // Validação: campos obrigatórios
     if (!codigoContaBanco || !codigoBanco || !codigoAgencia || !descricao || !numeroConta) {
-      Alert.alert('Erro', 'Preencha todos os campos.');
+      Alert.alert('Campos obrigatórios', 'Por favor, preencha todos os campos antes de salvar.');
       return false;
     }
-    if (descricao.length > 40) {
-      Alert.alert('Erro', 'A descrição deve ter no máximo 40 caracteres.');
+
+    // Validação: Código Conta Banco (deve ser número positivo)
+    const validacaoCodigoContaBanco = validarNumero(codigoContaBanco, 'Código Conta Banco');
+    if (!validacaoCodigoContaBanco.valido) {
+      Alert.alert('Validação', validacaoCodigoContaBanco.mensagem || 'Código Conta Banco inválido.');
       return false;
     }
-    if (numeroConta.length > 20) {
-      Alert.alert('Erro', 'O número da conta deve ter no máximo 20 caracteres.');
+
+    // Validação: Código Banco (deve ser número positivo, geralmente 3 dígitos)
+    const validacaoCodigoBanco = validarNumero(codigoBanco, 'Código Banco');
+    if (!validacaoCodigoBanco.valido) {
+      Alert.alert('Validação', validacaoCodigoBanco.mensagem || 'Código Banco inválido.');
       return false;
     }
+    const codigoBancoNum = parseInt(codigoBanco.trim());
+    if (codigoBancoNum < 1 || codigoBancoNum > 999) {
+      Alert.alert('Validação', 'O código do banco deve estar entre 1 e 999 (ex: 001 para BB, 341 para Itaú).');
+      return false;
+    }
+
+    // Validação: Código Agência (deve ser número positivo)
+    const validacaoCodigoAgencia = validarNumero(codigoAgencia, 'Código Agência');
+    if (!validacaoCodigoAgencia.valido) {
+      Alert.alert('Validação', validacaoCodigoAgencia.mensagem || 'Código Agência inválido.');
+      return false;
+    }
+    const codigoAgenciaNum = parseInt(codigoAgencia.trim());
+    if (codigoAgenciaNum < 1 || codigoAgenciaNum > 99999) {
+      Alert.alert('Validação', 'O código da agência deve estar entre 1 e 99999.');
+      return false;
+    }
+
+    // Validação: Descrição (mínimo 3 caracteres, máximo 40)
+    const descricaoTrim = descricao.trim();
+    if (descricaoTrim.length < 3) {
+      Alert.alert('Validação', 'A descrição deve ter pelo menos 3 caracteres.');
+      return false;
+    }
+    if (descricaoTrim.length > 40) {
+      Alert.alert('Validação', 'A descrição deve ter no máximo 40 caracteres.');
+      return false;
+    }
+
+    // Validação: Número da Conta (mínimo 1 caractere, máximo 20)
+    const numeroContaTrim = numeroConta.trim();
+    if (numeroContaTrim.length < 1) {
+      Alert.alert('Validação', 'O número da conta é obrigatório.');
+      return false;
+    }
+    if (numeroContaTrim.length > 20) {
+      Alert.alert('Validação', 'O número da conta deve ter no máximo 20 caracteres.');
+      return false;
+    }
+
     return true;
   };
 
@@ -118,7 +179,23 @@ export default function AccountsScreen() {
       await carregarContas(userId);
     } catch (error: any) {
       console.error('Erro ao salvar conta:', error);
-      Alert.alert('Erro', error.message || 'Não foi possível salvar a conta.');
+      
+      // Mensagens de erro mais específicas e amigáveis
+      let mensagemErro = 'Não foi possível salvar a conta.';
+      
+      if (error.message) {
+        if (error.message.includes('duplicate') || error.message.includes('unique')) {
+          mensagemErro = 'Já existe uma conta com esses dados. Verifique as informações e tente novamente.';
+        } else if (error.message.includes('foreign key') || error.message.includes('constraint')) {
+          mensagemErro = 'Erro ao vincular a conta. Verifique se todos os dados estão corretos.';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          mensagemErro = 'Erro de conexão. Verifique sua internet e tente novamente.';
+        } else {
+          mensagemErro = error.message;
+        }
+      }
+      
+      Alert.alert('Erro ao salvar', mensagemErro);
     }
   };
 
@@ -269,7 +346,11 @@ export default function AccountsScreen() {
                   <ThemedText style={styles.inputLabel}>Código Conta Banco</ThemedText>
                   <TextInput
                     value={codigoContaBanco}
-                    onChangeText={setCodigoContaBanco}
+                    onChangeText={(text) => {
+                      // Permite apenas números
+                      const numeros = text.replace(/[^0-9]/g, '');
+                      setCodigoContaBanco(numeros);
+                    }}
                     placeholder="Ex: 1"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     keyboardType="numeric"
@@ -281,10 +362,15 @@ export default function AccountsScreen() {
                   <ThemedText style={styles.inputLabel}>Código Banco</ThemedText>
                   <TextInput
                     value={codigoBanco}
-                    onChangeText={setCodigoBanco}
-                    placeholder="Ex: 001 (BB), 341 (Itaú)"
+                    onChangeText={(text) => {
+                      // Permite apenas números
+                      const numeros = text.replace(/[^0-9]/g, '');
+                      setCodigoBanco(numeros);
+                    }}
+                    placeholder="Ex: 001 (BB), 341 (Itaú), 237 (Bradesco)"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     keyboardType="numeric"
+                    maxLength={3}
                     style={styles.input}
                   />
                 </View>
@@ -293,16 +379,23 @@ export default function AccountsScreen() {
                   <ThemedText style={styles.inputLabel}>Código Agência</ThemedText>
                   <TextInput
                     value={codigoAgencia}
-                    onChangeText={setCodigoAgencia}
+                    onChangeText={(text) => {
+                      // Permite apenas números
+                      const numeros = text.replace(/[^0-9]/g, '');
+                      setCodigoAgencia(numeros);
+                    }}
                     placeholder="Ex: 1234"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     keyboardType="numeric"
+                    maxLength={5}
                     style={styles.input}
                   />
                 </View>
 
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.inputLabel}>Descrição</ThemedText>
+                  <ThemedText style={styles.inputLabel}>
+                    Descrição {descricao.length > 0 && `(${descricao.length}/40)`}
+                  </ThemedText>
                   <TextInput
                     value={descricao}
                     onChangeText={setDescricao}
@@ -314,7 +407,9 @@ export default function AccountsScreen() {
                 </View>
 
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.inputLabel}>Número da Conta</ThemedText>
+                  <ThemedText style={styles.inputLabel}>
+                    Número da Conta {numeroConta.length > 0 && `(${numeroConta.length}/20)`}
+                  </ThemedText>
                   <TextInput
                     value={numeroConta}
                     onChangeText={setNumeroConta}

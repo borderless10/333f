@@ -33,6 +33,7 @@ const MAPPING = {
   'pencil': 'edit',
   'trash': 'delete',
   'xmark.circle.fill': 'cancel',
+  'magnifyingglass': 'search',
 } as IconMapping;
 
 /**

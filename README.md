@@ -10,7 +10,18 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Configure as variáveis de ambiente
+
+   Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis:
+
+   ```env
+   EXPO_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon-aqui
+   ```
+
+   **Importante:** O arquivo `.env` já está no `.gitignore` e não será commitado. Se você não criar o arquivo `.env`, o app usará valores padrão (não recomendado para produção).
+
+3. Start the app
 
    ```bash
    npx expo start

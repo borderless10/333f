@@ -3,13 +3,14 @@ import { GlassContainer } from '@/components/glass-container';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type FilterType = 'all' | 'income' | 'expense';
 
 export default function TransactionsScreen() {
   const [filter, setFilter] = useState<FilterType>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const insets = useSafeAreaInsets();
 
   // Dados mockados - serão substituídos pela API
@@ -89,8 +90,16 @@ export default function TransactionsScreen() {
   };
 
   const filteredTransactions = transactions.filter((transaction) => {
-    if (filter === 'all') return true;
-    return transaction.type === filter;
+    // Filtro por tipo (receita/despesa/todas)
+    const matchesFilter = filter === 'all' || transaction.type === filter;
+    
+    // Filtro por busca (descrição, categoria ou conta)
+    const matchesSearch = searchQuery.trim() === '' || 
+      transaction.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      transaction.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      transaction.account.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    return matchesFilter && matchesSearch;
   });
 
   const FilterButton = ({ type, label }: { type: FilterType; label: string }) => {
@@ -125,6 +134,30 @@ export default function TransactionsScreen() {
           </ThemedText>
         </View>
 
+        {/* Search Bar */}
+        <GlassContainer style={styles.searchContainer}>
+          <View style={styles.searchInputWrapper}>
+            <IconSymbol name="magnifyingglass" size={20} color="rgba(255, 255, 255, 0.6)" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar por descrição, categoria ou conta..."
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={styles.clearButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <IconSymbol name="xmark.circle.fill" size={20} color="rgba(255, 255, 255, 0.6)" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </GlassContainer>
+
         {/* Filters */}
         <View style={styles.filters}>
           <FilterButton type="all" label="Todas" />
@@ -133,8 +166,19 @@ export default function TransactionsScreen() {
         </View>
 
         {/* Transactions List */}
-        <View style={styles.transactionsList}>
-          {filteredTransactions.map((transaction) => (
+        {filteredTransactions.length === 0 ? (
+          <GlassContainer style={styles.emptyState}>
+            <IconSymbol name="magnifyingglass" size={48} color="rgba(255, 255, 255, 0.5)" />
+            <ThemedText style={styles.emptyStateText}>
+              Nenhuma transação encontrada
+            </ThemedText>
+            <ThemedText style={styles.emptyStateSubtext}>
+              {searchQuery ? 'Tente buscar com outros termos' : 'Não há transações para exibir'}
+            </ThemedText>
+          </GlassContainer>
+        ) : (
+          <View style={styles.transactionsList}>
+            {filteredTransactions.map((transaction) => (
             <GlassContainer key={transaction.id} style={styles.transactionCard}>
               <View style={styles.transactionHeader}>
                 <View
@@ -177,7 +221,8 @@ export default function TransactionsScreen() {
               </View>
             </GlassContainer>
           ))}
-        </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -203,6 +248,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
     color: 'rgba(255, 255, 255, 0.8)',
+  },
+  searchContainer: {
+    marginBottom: 16,
+    padding: 12,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#FFFFFF',
+    paddingVertical: 8,
+  },
+  clearButton: {
+    padding: 4,
   },
   filters: {
     flexDirection: 'row',
@@ -272,5 +335,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     color: 'rgba(255, 255, 255, 0.6)',
+  },
+  emptyState: {
+    padding: 32,
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  emptyStateText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  emptyStateSubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
   },
 });

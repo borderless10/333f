@@ -27,9 +27,28 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
 
+  // Função para validar formato de email
+  const validarEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email.trim());
+  };
+
   const handleLogin = async () => {
+    // Validação: campos obrigatórios
     if (!email || !password) {
-      setError('Informe seu e-mail e senha para continuar.');
+      setError('Por favor, preencha todos os campos.');
+      return;
+    }
+
+    // Validação: formato de email
+    if (!validarEmail(email)) {
+      setError('Por favor, insira um e-mail válido (exemplo: seu@email.com).');
+      return;
+    }
+
+    // Validação: senha mínima
+    if (password.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres.');
       return;
     }
 
@@ -43,7 +62,22 @@ export default function LoginScreen() {
       });
 
       if (authError) {
-        setError(authError.message || 'Erro ao fazer login. Verifique suas credenciais.');
+        // Mensagens de erro mais amigáveis e específicas
+        let mensagemErro = 'Erro ao fazer login.';
+        
+        if (authError.message.includes('Invalid login credentials')) {
+          mensagemErro = 'E-mail ou senha incorretos. Verifique suas credenciais e tente novamente.';
+        } else if (authError.message.includes('Email not confirmed')) {
+          mensagemErro = 'Por favor, confirme seu e-mail antes de fazer login.';
+        } else if (authError.message.includes('Too many requests')) {
+          mensagemErro = 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.';
+        } else if (authError.message.includes('network')) {
+          mensagemErro = 'Erro de conexão. Verifique sua internet e tente novamente.';
+        } else {
+          mensagemErro = authError.message || 'Erro ao fazer login. Tente novamente.';
+        }
+        
+        setError(mensagemErro);
         setLoading(false);
         return;
       }
