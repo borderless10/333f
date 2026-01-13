@@ -1,0 +1,97 @@
+import { supabase } from '../supabase';
+
+export interface Transaction {
+  id?: number;
+  codigo_empresa: string; // user_id
+  descricao: string;
+  valor: number;
+  data: string; // formato: YYYY-MM-DD
+  tipo: 'receita' | 'despesa';
+  categoria: string;
+  conta_bancaria_id?: number | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TransactionWithAccount extends Transaction {
+  contas_bancarias?: {
+    id: number;
+    descricao: string;
+  };
+}
+
+/**
+ * Busca todas as transações do usuário
+ */
+export async function buscarTransacoes(userId: string) {
+  const { data, error } = await supabase
+    .from('transacoes')
+    .select(`
+      *,
+      contas_bancarias:conta_bancaria_id (
+        id,
+        descricao
+      )
+    `)
+    .eq('codigo_empresa', userId)
+    .order('data', { ascending: false });
+
+  if (error) {
+    console.error('Erro ao buscar transações:', error);
+    return { data: null, error };
+  }
+
+  return { data: data as TransactionWithAccount[], error: null };
+}
+
+/**
+ * Cria uma nova transação
+ */
+export async function criarTransacao(transacao: Omit<Transaction, 'id' | 'created_at' | 'updated_at'>) {
+  const { data, error } = await supabase
+    .from('transacoes')
+    .insert([transacao])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Erro ao criar transação:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Atualiza uma transação existente
+ */
+export async function atualizarTransacao(id: number, atualizacoes: Partial<Transaction>) {
+  const { data, error } = await supabase
+    .from('transacoes')
+    .update({ ...atualizacoes, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Erro ao atualizar transação:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Deleta uma transação
+ */
+export async function deletarTransacao(id: number) {
+  const { error } = await supabase
+    .from('transacoes')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Erro ao deletar transação:', error);
+    throw error;
+  }
+}

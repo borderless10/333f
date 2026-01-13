@@ -2,77 +2,52 @@ import { AnimatedBackground } from '@/components/animated-background';
 import { GlassContainer } from '@/components/glass-container';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/contexts/AuthContext';
+import { buscarTransacoes, type TransactionWithAccount } from '@/lib/services/transactions';
+import { formatCurrency } from '@/lib/utils/currency';
 
 type FilterType = 'all' | 'income' | 'expense';
+type SortType = 'date-desc' | 'date-asc' | 'value-desc' | 'value-asc' | 'name-asc' | 'name-desc';
 
 export default function TransactionsScreen() {
   const [filter, setFilter] = useState<FilterType>('all');
+  const [sortBy, setSortBy] = useState<SortType>('date-desc');
   const [searchQuery, setSearchQuery] = useState('');
+  const [transactions, setTransactions] = useState<TransactionWithAccount[]>([]);
+  const [loading, setLoading] = useState(true);
   const insets = useSafeAreaInsets();
+  const { userId } = useAuth();
 
-  // Dados mockados - serão substituídos pela API
-  const transactions = [
-    {
-      id: '1',
-      description: 'Pagamento de fornecedor XYZ',
-      amount: -5000,
-      date: '2024-01-20',
-      category: 'Fornecedores',
-      account: 'Banco do Brasil',
-      type: 'expense' as const,
-    },
-    {
-      id: '2',
-      description: 'Recebimento cliente ABC',
-      amount: 12500,
-      date: '2024-01-19',
-      category: 'Vendas',
-      account: 'Itaú',
-      type: 'income' as const,
-    },
-    {
-      id: '3',
-      description: 'Salário funcionários',
-      amount: -45000,
-      date: '2024-01-15',
-      category: 'Folha de Pagamento',
-      account: 'Banco do Brasil',
-      type: 'expense' as const,
-    },
-    {
-      id: '4',
-      description: 'Venda produto XYZ',
-      amount: 8300,
-      date: '2024-01-14',
-      category: 'Vendas',
-      account: 'Bradesco',
-      type: 'income' as const,
-    },
-    {
-      id: '5',
-      description: 'Aluguel escritório',
-      amount: -3500,
-      date: '2024-01-10',
-      category: 'Despesas Operacionais',
-      account: 'Itaú',
-      type: 'expense' as const,
-    },
-    {
-      id: '6',
-      description: 'Recebimento cliente DEF',
-      amount: 15200,
-      date: '2024-01-08',
-      category: 'Vendas',
-      account: 'Banco do Brasil',
-      type: 'income' as const,
-    },
-  ];
+  // Carrega transações do Supabase
+  useEffect(() => {
+    loadTransactions();
+  }, [userId]);
+
+  const loadTransactions = async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data, error } = await buscarTransacoes(userId);
+      
+      if (!error && data) {
+        setTransactions(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar transações:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    const date = new Date(dateString + 'T00:00:00');
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -82,25 +57,45 @@ export default function TransactionsScreen() {
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   };
 
-  const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(amount);
-  };
+  // Filtro e ordenação com useMemo para otimização
+  const filteredAndSortedTransactions = useMemo(() => {
+    let result = transactions.filter((transaction) => {
+      // Filtro por tipo (receita/despesa/todas)
+      const tipo = transaction.tipo === 'receita' ? 'income' : 'expense';
+      const matchesFilter = filter === 'all' || tipo === filter;
+      
+      // Filtro por busca (descrição, categoria ou conta)
+      const contaDescricao = transaction.contas_bancarias?.descricao || 'Sem conta';
+      const matchesSearch = searchQuery.trim() === '' || 
+        transaction.descricao.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        transaction.categoria.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        contaDescricao.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      return matchesFilter && matchesSearch;
+    });
 
-  const filteredTransactions = transactions.filter((transaction) => {
-    // Filtro por tipo (receita/despesa/todas)
-    const matchesFilter = filter === 'all' || transaction.type === filter;
-    
-    // Filtro por busca (descrição, categoria ou conta)
-    const matchesSearch = searchQuery.trim() === '' || 
-      transaction.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      transaction.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      transaction.account.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    return matchesFilter && matchesSearch;
-  });
+    // Ordenação
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'date-desc':
+          return new Date(b.data).getTime() - new Date(a.data).getTime();
+        case 'date-asc':
+          return new Date(a.data).getTime() - new Date(b.data).getTime();
+        case 'value-desc':
+          return b.valor - a.valor;
+        case 'value-asc':
+          return a.valor - b.valor;
+        case 'name-asc':
+          return a.descricao.localeCompare(b.descricao);
+        case 'name-desc':
+          return b.descricao.localeCompare(a.descricao);
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [transactions, filter, searchQuery, sortBy]);
 
   const FilterButton = ({ type, label }: { type: FilterType; label: string }) => {
     const isActive = filter === type;
@@ -120,6 +115,18 @@ export default function TransactionsScreen() {
     );
   };
 
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <AnimatedBackground />
+        <View style={[styles.loadingContainer, { paddingTop: insets.top + 16 }]}>
+          <ActivityIndicator size="large" color="#00b09b" />
+          <ThemedText style={styles.loadingText}>Carregando transações...</ThemedText>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <AnimatedBackground />
@@ -130,7 +137,7 @@ export default function TransactionsScreen() {
         <View style={styles.header}>
           <ThemedText type="title" style={styles.title}>Transações</ThemedText>
           <ThemedText style={styles.subtitle}>
-            Histórico completo de movimentações
+            {transactions.length} transaç{transactions.length !== 1 ? 'ões' : 'ão'} registrada{transactions.length !== 1 ? 's' : ''}
           </ThemedText>
         </View>
 
@@ -158,6 +165,29 @@ export default function TransactionsScreen() {
           </View>
         </GlassContainer>
 
+        {/* Sort and Filters Row */}
+        <View style={styles.controlsRow}>
+          {/* Sort Selector */}
+          <GlassContainer style={styles.sortContainer}>
+            <IconSymbol name="arrow.up.arrow.down" size={16} color="rgba(255, 255, 255, 0.6)" />
+            <View style={styles.sortPicker}>
+              <TouchableOpacity
+                onPress={() => {
+                  // Cicla entre as opções de ordenação
+                  const sortOptions: SortType[] = [
+                    'date-desc', 'date-asc', 'value-desc', 'value-asc', 'name-asc', 'name-desc'
+                  ];
+                  const currentIndex = sortOptions.indexOf(sortBy);
+                  const nextIndex = (currentIndex + 1) % sortOptions.length;
+                  setSortBy(sortOptions[nextIndex]);
+                }}
+                style={styles.sortButton}>
+                <Text style={styles.sortText}>{getSortLabel(sortBy)}</Text>
+              </TouchableOpacity>
+            </View>
+          </GlassContainer>
+        </View>
+
         {/* Filters */}
         <View style={styles.filters}>
           <FilterButton type="all" label="Todas" />
@@ -166,7 +196,7 @@ export default function TransactionsScreen() {
         </View>
 
         {/* Transactions List */}
-        {filteredTransactions.length === 0 ? (
+        {filteredAndSortedTransactions.length === 0 ? (
           <GlassContainer style={styles.emptyState}>
             <IconSymbol name="magnifyingglass" size={48} color="rgba(255, 255, 255, 0.5)" />
             <ThemedText style={styles.emptyStateText}>
@@ -178,54 +208,71 @@ export default function TransactionsScreen() {
           </GlassContainer>
         ) : (
           <View style={styles.transactionsList}>
-            {filteredTransactions.map((transaction) => (
-            <GlassContainer key={transaction.id} style={styles.transactionCard}>
-              <View style={styles.transactionHeader}>
-                <View
-                  style={[
-                    styles.transactionIcon,
-                    {
-                      backgroundColor:
-                        transaction.type === 'income' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                    },
-                  ]}>
-                  <IconSymbol
-                    name={transaction.type === 'income' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'}
-                    size={20}
-                    color={transaction.type === 'income' ? '#10B981' : '#EF4444'}
-                  />
-                </View>
-                <View style={styles.transactionInfo}>
-                  <ThemedText type="defaultSemiBold" style={styles.transactionDescription}>
-                    {transaction.description}
-                  </ThemedText>
-                  <ThemedText style={styles.transactionMeta}>
-                    {transaction.category} • {transaction.account}
-                  </ThemedText>
-                </View>
-                <View style={styles.transactionAmount}>
-                  <Text
-                    style={[
-                      styles.amountText,
-                      {
-                        color: transaction.type === 'income' ? '#10B981' : '#EF4444',
-                      },
-                    ]}>
-                    {transaction.type === 'income' ? '+' : ''}
-                    {formatAmount(transaction.amount)}
-                  </Text>
-                  <ThemedText style={styles.transactionDate}>
-                    {formatDate(transaction.date)}
-                  </ThemedText>
-                </View>
-              </View>
-            </GlassContainer>
-          ))}
+            {filteredAndSortedTransactions.map((transaction) => {
+              const tipo = transaction.tipo === 'receita' ? 'income' : 'expense';
+              const contaDescricao = transaction.contas_bancarias?.descricao || 'Sem conta';
+              
+              return (
+                <GlassContainer key={transaction.id} style={styles.transactionCard}>
+                  <View style={styles.transactionHeader}>
+                    <View
+                      style={[
+                        styles.transactionIcon,
+                        {
+                          backgroundColor:
+                            tipo === 'income' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                        },
+                      ]}>
+                      <IconSymbol
+                        name={tipo === 'income' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'}
+                        size={20}
+                        color={tipo === 'income' ? '#10B981' : '#EF4444'}
+                      />
+                    </View>
+                    <View style={styles.transactionInfo}>
+                      <ThemedText type="defaultSemiBold" style={styles.transactionDescription}>
+                        {transaction.descricao}
+                      </ThemedText>
+                      <ThemedText style={styles.transactionMeta}>
+                        {transaction.categoria} • {contaDescricao}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.transactionAmount}>
+                      <Text
+                        style={[
+                          styles.amountText,
+                          {
+                            color: tipo === 'income' ? '#10B981' : '#EF4444',
+                          },
+                        ]}>
+                        {tipo === 'income' ? '+' : '-'}
+                        {formatCurrency(transaction.valor)}
+                      </Text>
+                      <ThemedText style={styles.transactionDate}>
+                        {formatDate(transaction.data)}
+                      </ThemedText>
+                    </View>
+                  </View>
+                </GlassContainer>
+              );
+            })}
           </View>
         )}
       </ScrollView>
     </View>
   );
+}
+
+function getSortLabel(sortBy: SortType): string {
+  const labels: Record<SortType, string> = {
+    'date-desc': 'Data ↓',
+    'date-asc': 'Data ↑',
+    'value-desc': 'Valor ↓',
+    'value-asc': 'Valor ↑',
+    'name-asc': 'Nome A-Z',
+    'name-desc': 'Nome Z-A',
+  };
+  return labels[sortBy];
 }
 
 const styles = StyleSheet.create({
@@ -237,6 +284,17 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  loadingText: {
+    marginTop: 16,
+    color: '#FFFFFF',
+    fontSize: 16,
   },
   header: {
     marginBottom: 24,
@@ -250,7 +308,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
   },
   searchContainer: {
-    marginBottom: 16,
+    marginBottom: 12,
     padding: 12,
   },
   searchInputWrapper: {
@@ -266,6 +324,26 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     padding: 4,
+  },
+  controlsRow: {
+    marginBottom: 12,
+  },
+  sortContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 8,
+  },
+  sortPicker: {
+    flex: 1,
+  },
+  sortButton: {
+    paddingVertical: 4,
+  },
+  sortText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   filters: {
     flexDirection: 'row',
