@@ -9,10 +9,12 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { useScrollToTop } from '@/hooks/use-scroll-to-top';
 
 export default function AccountsScreen() {
   const insets = useSafeAreaInsets();
-  const { userId } = useAuth(); // ✅ Usar hook de auth
+  const { userId } = useAuth();
+  const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -244,6 +246,7 @@ export default function AccountsScreen() {
     <View style={styles.container}>
       <AnimatedBackground />
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>

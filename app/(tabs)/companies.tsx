@@ -18,6 +18,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
+import { useScrollToTop } from '@/hooks/use-scroll-to-top';
 import {
   buscarEmpresas,
   criarEmpresa,
@@ -38,6 +39,7 @@ export default function CompaniesScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const { canEdit, canDelete, isViewerOnly } = usePermissions();
+  const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -284,6 +286,7 @@ export default function CompaniesScreen() {
     <View style={styles.container}>
       <AnimatedBackground />
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>

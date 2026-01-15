@@ -18,6 +18,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { useScrollToTop } from '@/hooks/use-scroll-to-top';
 import {
   buscarUsuariosComPerfis,
   criarPerfil,
@@ -35,6 +36,7 @@ type FilterRole = 'all' | 'admin' | 'analista' | 'viewer' | 'no_profile';
 export default function UsersScreen() {
   const insets = useSafeAreaInsets();
   const { userId, refreshUserRole } = useAuth();
+  const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
 
   const [users, setUsers] = useState<UserWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,6 +180,7 @@ export default function UsersScreen() {
           </View>
         ) : (
           <ScrollView
+            ref={scrollRef}
             style={styles.scrollView}
             contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
             showsVerticalScrollIndicator={false}>

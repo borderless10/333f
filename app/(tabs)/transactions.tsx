@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { buscarTransacoes, type TransactionWithAccount } from '@/lib/services/transactions';
 import { formatCurrency } from '@/lib/utils/currency';
+import { useScrollToTop } from '@/hooks/use-scroll-to-top';
 
 type FilterType = 'all' | 'income' | 'expense';
 type SortType = 'date-desc' | 'date-asc' | 'value-desc' | 'value-asc' | 'name-asc' | 'name-desc';
@@ -20,6 +21,7 @@ export default function TransactionsScreen() {
   const [loading, setLoading] = useState(true);
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
+  const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
 
   // Carrega transações do Supabase
   useEffect(() => {
@@ -145,6 +147,7 @@ export default function TransactionsScreen() {
     <View style={styles.container}>
       <AnimatedBackground />
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>

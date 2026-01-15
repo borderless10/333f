@@ -69,7 +69,7 @@ export default function TabLayout() {
         name="users"
         options={{
           title: 'Usuários',
-          tabBarIcon: ({ color }) => <MaterialIcons name="groups" size={28} color={color} />,
+          tabBarIcon: ({ color }) => <MaterialIcons name="supervisor-account" size={28} color={color} />,
           href: isAdmin ? '/users' : null,
         }}
       />
