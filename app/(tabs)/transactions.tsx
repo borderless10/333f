@@ -28,19 +28,33 @@ export default function TransactionsScreen() {
 
   const loadTransactions = async () => {
     if (!userId) {
+      console.log('📊 Transações: Aguardando userId...');
       setLoading(false);
+      setTransactions([]);
       return;
     }
 
     try {
+      console.log('📊 Transações: Carregando dados para userId:', userId);
       setLoading(true);
       const { data, error } = await buscarTransacoes(userId);
       
-      if (!error && data) {
+      if (error) {
+        console.error('❌ Erro ao buscar transações:', error);
+        setTransactions([]);
+        setLoading(false);
+        return;
+      }
+      
+      if (data) {
+        console.log('✅ Transações carregadas:', data.length);
         setTransactions(data);
+      } else {
+        setTransactions([]);
       }
     } catch (error) {
-      console.error('Erro ao carregar transações:', error);
+      console.error('❌ Erro ao carregar transações:', error);
+      setTransactions([]);
     } finally {
       setLoading(false);
     }

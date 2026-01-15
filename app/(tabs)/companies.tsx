@@ -68,19 +68,33 @@ export default function CompaniesScreen() {
 
   const loadCompanies = async () => {
     if (!userId) {
+      console.log('🏢 Empresas: Aguardando userId...');
       setLoading(false);
+      setCompanies([]);
       return;
     }
 
     try {
+      console.log('🏢 Empresas: Carregando dados para userId:', userId);
       setLoading(true);
       const { data, error } = await buscarEmpresas(userId);
 
-      if (!error && data) {
+      if (error) {
+        console.error('❌ Erro ao buscar empresas:', error);
+        setCompanies([]);
+        setLoading(false);
+        return;
+      }
+
+      if (data) {
+        console.log('✅ Empresas carregadas:', data.length);
         setCompanies(data);
+      } else {
+        setCompanies([]);
       }
     } catch (error) {
-      console.error('Erro ao carregar empresas:', error);
+      console.error('❌ Erro ao carregar empresas:', error);
+      setCompanies([]);
     } finally {
       setLoading(false);
     }

@@ -66,26 +66,41 @@ export default function TitlesScreen() {
 
   const loadData = async () => {
     if (!userId) {
+      console.log('📋 Títulos: Aguardando userId...');
       setLoading(false);
+      setTitles([]);
+      setContas([]);
       return;
     }
 
     try {
+      console.log('📋 Títulos: Carregando dados para userId:', userId);
       setLoading(true);
       const [titlesResult, contasResult] = await Promise.all([
         buscarTitulos(userId),
         buscarContas(userId),
       ]);
 
-      if (!titlesResult.error && titlesResult.data) {
+      if (titlesResult.error) {
+        console.error('❌ Erro ao buscar títulos:', titlesResult.error);
+        setTitles([]);
+      } else if (titlesResult.data) {
+        console.log('✅ Títulos carregados:', titlesResult.data.length);
         setTitles(titlesResult.data);
+      } else {
+        setTitles([]);
       }
 
       if (contasResult) {
+        console.log('✅ Contas carregadas:', contasResult.length);
         setContas(contasResult);
+      } else {
+        setContas([]);
       }
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('❌ Erro ao carregar dados:', error);
+      setTitles([]);
+      setContas([]);
     } finally {
       setLoading(false);
     }

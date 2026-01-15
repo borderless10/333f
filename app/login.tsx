@@ -84,7 +84,8 @@ export default function LoginScreen() {
 
       if (data.user) {
         console.log('✅ Login bem-sucedido:', data.user.email);
-        router.replace('/(tabs)');
+        // O redirecionamento é feito automaticamente pelo _layout.tsx
+        // após detectar que o usuário está autenticado
       }
     } catch (err) {
       console.error('❌ Erro inesperado no login:', err);

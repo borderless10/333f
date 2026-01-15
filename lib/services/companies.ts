@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 export interface Company {
   id?: number;
   codigo_empresa: string; // user_id
+  empresa_telos_id?: string; // UUID da empresa Télos (ex: Télos Control)
   razao_social: string;
   nome_fantasia?: string;
   cnpj: string;
@@ -15,6 +16,16 @@ export interface Company {
   telefone?: string;
   email?: string;
   observacoes?: string;
+  ativa: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface EmpresaTelos {
+  id: string; // UUID
+  nome: string;
+  cnpj?: string;
+  razao_social?: string;
   ativa: boolean;
   created_at?: string;
   updated_at?: string;
@@ -113,6 +124,69 @@ export function validarEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
+/**
+ * Busca o ID da empresa Télos do usuário autenticado
+ */
+export async function buscarEmpresaTelosDoUsuario(): Promise<string | null> {
+  const { data, error } = await supabase.rpc('get_user_empresa_telos_id');
+  
+  if (error) {
+    console.error('Erro ao buscar empresa Télos do usuário:', error);
+    return null;
+  }
+  
+  return data as string | null;
+}
+
+/**
+ * Busca todas as empresas Télos (apenas para admins)
+ */
+export async function buscarEmpresasTelos() {
+  const { data, error } = await supabase
+    .from('empresas_telos')
+    .select('*')
+    .order('nome');
+  
+  if (error) {
+    console.error('Erro ao buscar empresas Télos:', error);
+    return { data: null, error };
+  }
+  
+  return { data: data as EmpresaTelos[], error: null };
+}
+
+/**
+ * Valida se CNPJ está duplicado dentro da mesma empresa Télos
+ */
+export async function validarCNPJDuplicado(
+  cnpj: string, 
+  empresaTelosId: string,
+  empresaId?: number
+): Promise<boolean> {
+  const cnpjLimpo = limparCNPJ(cnpj);
+  
+  let query = supabase
+    .from('empresas')
+    .select('id')
+    .eq('cnpj', cnpjLimpo)
+    .eq('empresa_telos_id', empresaTelosId);
+  
+  // Se estiver editando, excluir a própria empresa da verificação
+  if (empresaId) {
+    query = query.neq('id', empresaId);
+  }
+  
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error('Erro ao validar CNPJ duplicado:', error);
+    return false;
+  }
+  
+  // Retorna true se encontrou duplicatas
+  return (data?.length || 0) > 0;
+}
+
 export interface CompanyFilters {
   ativa?: boolean;
   busca?: string;
@@ -165,9 +239,25 @@ export async function criarEmpresa(empresa: Omit<Company, 'id' | 'created_at' | 
     throw new Error('Email inválido');
   }
 
+  // Busca empresa Télos do usuário se não foi fornecida
+  let empresaTelosId = empresa.empresa_telos_id;
+  if (!empresaTelosId) {
+    empresaTelosId = await buscarEmpresaTelosDoUsuario();
+    if (!empresaTelosId) {
+      throw new Error('Não foi possível identificar sua empresa. Entre em contato com o suporte.');
+    }
+  }
+
+  // Valida se CNPJ já existe na mesma empresa Télos
+  const cnpjDuplicado = await validarCNPJDuplicado(empresa.cnpj, empresaTelosId);
+  if (cnpjDuplicado) {
+    throw new Error('Este CNPJ já está cadastrado na sua empresa');
+  }
+
   // Remove formatação do CNPJ para salvar no banco
   const empresaParaSalvar = {
     ...empresa,
+    empresa_telos_id: empresaTelosId,
     cnpj: limparCNPJ(empresa.cnpj),
   };
 
@@ -182,7 +272,7 @@ export async function criarEmpresa(empresa: Omit<Company, 'id' | 'created_at' | 
     
     // Mensagem específica para CNPJ duplicado
     if (error.message.includes('duplicate') || error.message.includes('unique')) {
-      throw new Error('Este CNPJ já está cadastrado');
+      throw new Error('Este CNPJ já está cadastrado na sua empresa');
     }
     
     throw error;
@@ -205,6 +295,28 @@ export async function atualizarEmpresa(id: number, atualizacoes: Partial<Company
     throw new Error('Email inválido');
   }
 
+  // Se está atualizando o CNPJ, valida duplicidade
+  if (atualizacoes.cnpj) {
+    // Busca a empresa atual para obter empresa_telos_id
+    const { data: empresaAtual } = await supabase
+      .from('empresas')
+      .select('empresa_telos_id')
+      .eq('id', id)
+      .single();
+    
+    if (empresaAtual?.empresa_telos_id) {
+      const cnpjDuplicado = await validarCNPJDuplicado(
+        atualizacoes.cnpj, 
+        empresaAtual.empresa_telos_id,
+        id // Excluir a própria empresa da verificação
+      );
+      
+      if (cnpjDuplicado) {
+        throw new Error('Este CNPJ já está cadastrado na sua empresa');
+      }
+    }
+  }
+
   // Remove formatação do CNPJ se fornecido
   const empresaAtualizada = { ...atualizacoes };
   if (empresaAtualizada.cnpj) {
@@ -223,7 +335,7 @@ export async function atualizarEmpresa(id: number, atualizacoes: Partial<Company
     
     // Mensagem específica para CNPJ duplicado
     if (error.message.includes('duplicate') || error.message.includes('unique')) {
-      throw new Error('Este CNPJ já está cadastrado');
+      throw new Error('Este CNPJ já está cadastrado na sua empresa');
     }
     
     throw error;

@@ -8,12 +8,13 @@ import { supabase } from '@/lib/supabase';
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function AccountsScreen() {
   const insets = useSafeAreaInsets();
+  const { userId } = useAuth(); // ✅ Usar hook de auth
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingConta, setEditingConta] = useState<ContaBancaria | null>(null);
   
@@ -25,30 +26,26 @@ export default function AccountsScreen() {
   const [numeroConta, setNumeroConta] = useState('');
 
   useEffect(() => {
-    carregarUsuarioEContas();
-  }, []);
-
-  const carregarUsuarioEContas = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserId(user.id);
-        await carregarContas(user.id);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar usuário:', error);
-    } finally {
+    if (userId) {
+      carregarContas(userId);
+    } else {
       setLoading(false);
     }
-  };
+  }, [userId]); // ✅ Dependência correta
 
   const carregarContas = async (userId: string) => {
     try {
+      console.log('💳 Contas: Carregando dados para userId:', userId);
+      setLoading(true);
       const dados = await buscarContas(userId);
-      setContas(dados);
+      console.log('✅ Contas carregadas:', dados?.length || 0);
+      setContas(dados || []);
     } catch (error) {
-      console.error('Erro ao carregar contas:', error);
+      console.error('❌ Erro ao carregar contas:', error);
+      setContas([]);
       Alert.alert('Erro', 'Não foi possível carregar as contas.');
+    } finally {
+      setLoading(false); // ✅ CORRIGIDO
     }
   };
 

@@ -29,12 +29,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadUserRole = async (uid: string) => {
     try {
       setRoleLoading(true);
-      const { data: perfil } = await buscarPerfilUsuario(uid);
+      const { data: perfil, error } = await buscarPerfilUsuario(uid);
+      
+      if (error) {
+        console.error('Erro ao buscar perfil:', error);
+        setUserRole(null);
+        setRoleLoading(false);
+        return;
+      }
+      
       setUserRole(perfil?.role || null);
+      setRoleLoading(false);
     } catch (error) {
       console.error('Erro ao carregar perfil do usuário:', error);
       setUserRole(null);
-    } finally {
       setRoleLoading(false);
     }
   };
@@ -52,26 +60,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * Verifica se há sessão ativa ao carregar o app
    */
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setUserId(session?.user?.id ?? null);
-      
-      if (session?.user?.id) {
-        loadUserRole(session.user.id);
-      } else {
+    const initAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Erro ao buscar sessão:', error);
+          setLoading(false);
+          setRoleLoading(false);
+          return;
+        }
+        
+        setUser(session?.user ?? null);
+        setUserId(session?.user?.id ?? null);
+        
+        if (session?.user?.id) {
+          await loadUserRole(session.user.id);
+        } else {
+          setRoleLoading(false);
+        }
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('Erro ao inicializar auth:', err);
+        setUser(null);
+        setUserId(null);
+        setUserRole(null);
+        setLoading(false);
         setRoleLoading(false);
       }
-      
-      setLoading(false);
-    });
+    };
+
+    initAuth();
 
     // Escuta mudanças na autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       setUserId(session?.user?.id ?? null);
       
       if (session?.user?.id) {
-        loadUserRole(session.user.id);
+        await loadUserRole(session.user.id);
       } else {
         setUserRole(null);
         setRoleLoading(false);
