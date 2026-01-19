@@ -22,12 +22,12 @@ export default function TabLayout() {
           backgroundColor: '#001a2e',
           borderTopColor: 'rgba(255, 255, 255, 0.1)',
           borderTopWidth: 1,
-          height: 75, // ✅ Altura maior (era 65)
-          paddingTop: 12,
-          paddingBottom: 12,
+          height: 90, // ✅ Altura maior para facilitar acesso no mobile
+          paddingTop: 8, // ✅ Mais espaço superior para ícones ficarem mais para cima
+          paddingBottom: 0, // ✅ Sem espaço inferior
         },
         tabBarItemStyle: {
-          paddingVertical: 8, // ✅ Mais espaçamento
+          paddingVertical: 0, // ✅ Sem padding vertical para ícones ficarem mais para cima
         },
       }}>
       <Tabs.Screen
