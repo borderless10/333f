@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs, usePathname } from 'expo-router';
+import React, { useEffect, useRef } from 'react';
+import { Animated } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { usePermissions } from '@/contexts/PermissionsContext';
@@ -9,9 +10,22 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { isAdmin } = usePermissions();
+  const pathname = usePathname();
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Animação de fade quando troca de aba
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [pathname]);
 
   return (
-    <Tabs
+    <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+      <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#00b09b',
         tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.6)',
@@ -81,5 +95,6 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    </Animated.View>
   );
 }

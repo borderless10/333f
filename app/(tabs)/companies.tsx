@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Modal,
   ScrollView,
   StyleSheet,
@@ -19,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
+import { useScreenAnimations } from '@/hooks/use-screen-animations';
 import {
   buscarEmpresas,
   criarEmpresa,
@@ -40,6 +42,8 @@ export default function CompaniesScreen() {
   const { userId } = useAuth();
   const { canEdit, canDelete, isViewerOnly } = usePermissions();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
+  const { animatedStyle: headerStyle } = useScreenAnimations(0);
+  const { animatedStyle: searchStyle } = useScreenAnimations(100);
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -290,22 +294,23 @@ export default function CompaniesScreen() {
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
+        <Animated.View style={[styles.header, headerStyle]}>
           <ThemedText type="title" style={styles.title}>
             Empresas
           </ThemedText>
           <ThemedText style={styles.subtitle}>
             {companies.length} empresa{companies.length !== 1 ? 's' : ''} cadastrada{companies.length !== 1 ? 's' : ''}
           </ThemedText>
-        </View>
+        </Animated.View>
 
         {/* Search Bar */}
-        <GlassContainer style={styles.searchContainer}>
+        <Animated.View style={searchStyle}>
+          <GlassContainer style={styles.searchContainer}>
           <View style={styles.searchInputWrapper}>
             <IconSymbol name="magnifyingglass" size={20} color="rgba(255, 255, 255, 0.6)" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Buscar por razão social, nome fantasia ou CNPJ..."
+              placeholder="Buscar por razão social, nome ou CNPJ..."
               placeholderTextColor="rgba(255, 255, 255, 0.5)"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -322,9 +327,10 @@ export default function CompaniesScreen() {
             )}
           </View>
         </GlassContainer>
+        </Animated.View>
 
         {/* Filters */}
-        <View style={styles.filters}>
+        <Animated.View style={[styles.filters, searchStyle]}>
           <TouchableOpacity
             style={[styles.filterButton, filterStatus === 'all' && styles.filterButtonActive]}
             onPress={() => setFilterStatus('all')}
@@ -361,7 +367,7 @@ export default function CompaniesScreen() {
               Inativas
             </Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Companies List */}
         {filteredCompanies.length === 0 ? (
@@ -501,10 +507,10 @@ export default function CompaniesScreen() {
                   />
                 </View>
 
-                {/* Nome Fantasia */}
+                {/* Nome */}
                 <View style={styles.inputContainer}>
                   <ThemedText style={styles.inputLabel}>
-                    Nome Fantasia ({nomeFantasia.length}/100)
+                    Nome ({nomeFantasia.length}/100)
                   </ThemedText>
                   <TextInput
                     value={nomeFantasia}

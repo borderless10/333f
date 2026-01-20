@@ -1,7 +1,11 @@
 import { AnimatedBackground } from '@/components/animated-background';
+import { CSVImportModal } from '@/components/csv-import-modal';
 import { GlassContainer } from '@/components/glass-container';
+import { NewTransactionModal } from '@/components/new-transaction-modal';
+import { ReportsModal } from '@/components/reports-modal';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
 import React from 'react';
 import { Animated, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -9,6 +13,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
+  const [csvImportVisible, setCsvImportVisible] = React.useState(false);
+  const [reportsVisible, setReportsVisible] = React.useState(false);
+  const [newTransactionVisible, setNewTransactionVisible] = React.useState(false);
   const insets = useSafeAreaInsets();
 
   // Animações
@@ -19,6 +26,8 @@ export default function DashboardScreen() {
   const expenseCardAnim = React.useRef(new Animated.Value(0)).current;
   const transactionsAnim = React.useRef(new Animated.Value(0)).current;
   const actionsAnim = React.useRef(new Animated.Value(0)).current;
+  const scaleAnim3 = React.useRef(new Animated.Value(1)).current;
+  const scaleAnim4 = React.useRef(new Animated.Value(1)).current;
 
   React.useEffect(() => {
     // Animação de entrada escalonada
@@ -97,6 +106,34 @@ export default function DashboardScreen() {
   };
   const handlePressOut2 = () => {
     Animated.spring(scaleAnim2, {
+      toValue: 1,
+      friction: 3,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  };
+  const handlePressIn3 = () => {
+    Animated.spring(scaleAnim3, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
+  };
+  const handlePressOut3 = () => {
+    Animated.spring(scaleAnim3, {
+      toValue: 1,
+      friction: 3,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  };
+  const handlePressIn4 = () => {
+    Animated.spring(scaleAnim4, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
+  };
+  const handlePressOut4 = () => {
+    Animated.spring(scaleAnim4, {
       toValue: 1,
       friction: 3,
       tension: 40,
@@ -396,34 +433,110 @@ export default function DashboardScreen() {
           <ThemedText type="subtitle" style={styles.sectionTitle}>
             Ações Rápidas
           </ThemedText>
-          <View style={styles.quickActions}>
+          <View style={styles.quickActionsContainer}>
+            <View style={styles.quickActions}>
             <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnim1 }] }}>
               <TouchableOpacity
-                style={[styles.actionCard, styles.actionCardPrimary]}
                 onPress={() => router.push('/(tabs)/accounts')}
                 onPressIn={handlePressIn1}
                 onPressOut={handlePressOut1}
-                activeOpacity={1}>
-                <Text style={styles.actionText}>
-                  Contas Bancárias
-                </Text>
+                activeOpacity={0.8}>
+                <GlassContainer style={styles.actionCard}>
+                  <View style={styles.actionCardContent}>
+                    <View style={[styles.actionIconContainer, { backgroundColor: '#00b09b20' }]}>
+                      <MaterialIcons name="account-balance-wallet" size={20} color="#00b09b" />
+                    </View>
+                    <ThemedText type="defaultSemiBold" style={styles.actionText}>
+                      Contas Bancárias
+                    </ThemedText>
+                  </View>
+                </GlassContainer>
               </TouchableOpacity>
             </Animated.View>
             <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnim2 }] }}>
               <TouchableOpacity
-                style={[styles.actionCard, styles.actionCardSuccess]}
-                onPress={() => router.push('/(tabs)/transactions')}
+                onPress={() => setNewTransactionVisible(true)}
                 onPressIn={handlePressIn2}
                 onPressOut={handlePressOut2}
-                activeOpacity={1}>
-                <Text style={styles.actionText}>
-                  Nova Transação
-                </Text>
+                activeOpacity={0.8}>
+                <GlassContainer style={styles.actionCard}>
+                  <View style={styles.actionCardContent}>
+                    <View style={[styles.actionIconContainer, { backgroundColor: '#10B98120' }]}>
+                      <IconSymbol name="plus.circle.fill" size={20} color="#10B981" />
+                    </View>
+                    <ThemedText type="defaultSemiBold" style={styles.actionText}>
+                      Nova Transação
+                    </ThemedText>
+                  </View>
+                </GlassContainer>
               </TouchableOpacity>
             </Animated.View>
+            </View>
+            
+            {/* Segunda linha de ações */}
+            <View style={styles.quickActions}>
+            <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnim3 }] }}>
+              <TouchableOpacity
+                onPress={() => setCsvImportVisible(true)}
+                onPressIn={handlePressIn3}
+                onPressOut={handlePressOut3}
+                activeOpacity={0.8}>
+                <GlassContainer style={styles.actionCard}>
+                  <View style={styles.actionCardContent}>
+                    <View style={[styles.actionIconContainer, { backgroundColor: '#3B82F620' }]}>
+                      <MaterialIcons name="upload-file" size={20} color="#3B82F6" />
+                    </View>
+                    <ThemedText type="defaultSemiBold" style={styles.actionText}>
+                      Importar CSV
+                    </ThemedText>
+                  </View>
+                </GlassContainer>
+              </TouchableOpacity>
+            </Animated.View>
+            <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnim4 }] }}>
+              <TouchableOpacity
+                onPress={() => setReportsVisible(true)}
+                onPressIn={handlePressIn4}
+                onPressOut={handlePressOut4}
+                activeOpacity={0.8}>
+                <GlassContainer style={styles.actionCard}>
+                  <View style={styles.actionCardContent}>
+                    <View style={[styles.actionIconContainer, { backgroundColor: '#F59E0B20' }]}>
+                      <IconSymbol name="chart.bar.fill" size={20} color="#F59E0B" />
+                    </View>
+                    <ThemedText type="defaultSemiBold" style={styles.actionText}>
+                      Relatórios
+                    </ThemedText>
+                  </View>
+                </GlassContainer>
+              </TouchableOpacity>
+            </Animated.View>
+            </View>
           </View>
         </Animated.View>
       </ScrollView>
+
+      {/* Modais */}
+      <CSVImportModal
+        visible={csvImportVisible}
+        onClose={() => setCsvImportVisible(false)}
+        onSuccess={() => {
+          // Recarregar dados após importação bem-sucedida
+          onRefresh();
+        }}
+      />
+      <ReportsModal
+        visible={reportsVisible}
+        onClose={() => setReportsVisible(false)}
+      />
+      <NewTransactionModal
+        visible={newTransactionVisible}
+        onClose={() => setNewTransactionVisible(false)}
+        onSuccess={() => {
+          // Recarregar dados após criar transação
+          onRefresh();
+        }}
+      />
     </View>
   );
 }
@@ -564,6 +677,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: '#FFFFFF',
+    marginBottom: 20,
   },
   seeAll: {
     fontSize: 14,
@@ -618,30 +732,25 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     flex: 1,
-    padding: 20,
+    padding: 16,
+    minHeight: 80,
+  },
+  actionCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  actionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 80,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  actionCardPrimary: {
-    backgroundColor: '#00b09b',
-  },
-  actionCardSuccess: {
-    backgroundColor: '#10B981',
+    marginRight: 12,
   },
   actionText: {
     fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
     color: '#FFFFFF',
+    flex: 1,
   },
 });

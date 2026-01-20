@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Modal,
   ScrollView,
   StyleSheet,
@@ -19,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
+import { useScreenAnimations } from '@/hooks/use-screen-animations';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
 import {
   buscarTitulos,
@@ -40,6 +42,8 @@ export default function TitlesScreen() {
   const { userId } = useAuth();
   const { canEdit, canDelete, isViewerOnly } = usePermissions();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
+  const { animatedStyle: headerStyle } = useScreenAnimations(0);
+  const { animatedStyle: searchStyle } = useScreenAnimations(100);
 
   const [titles, setTitles] = useState<TitleWithAccount[]>([]);
   const [contas, setContas] = useState<ContaBancaria[]>([]);
@@ -379,17 +383,18 @@ export default function TitlesScreen() {
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
+        <Animated.View style={[styles.header, headerStyle]}>
           <ThemedText type="title" style={styles.title}>
             Títulos
           </ThemedText>
           <ThemedText style={styles.subtitle}>
             {titles.length} título{titles.length !== 1 ? 's' : ''} cadastrado{titles.length !== 1 ? 's' : ''}
           </ThemedText>
-        </View>
+        </Animated.View>
 
         {/* Search Bar */}
-        <GlassContainer style={styles.searchContainer}>
+        <Animated.View style={searchStyle}>
+          <GlassContainer style={styles.searchContainer}>
           <View style={styles.searchInputWrapper}>
             <IconSymbol name="magnifyingglass" size={20} color="rgba(255, 255, 255, 0.6)" />
             <TextInput
@@ -411,6 +416,7 @@ export default function TitlesScreen() {
             )}
           </View>
         </GlassContainer>
+        </Animated.View>
 
         {/* Sort */}
         <GlassContainer style={styles.sortContainer}>

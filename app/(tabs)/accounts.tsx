@@ -6,10 +6,11 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { atualizarConta, buscarContas, criarConta, deletarConta, type ContaBancaria } from '@/lib/contas';
 import { supabase } from '@/lib/supabase';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
+import { useScreenAnimations } from '@/hooks/use-screen-animations';
 
 export default function AccountsScreen() {
   const insets = useSafeAreaInsets();
@@ -19,6 +20,8 @@ export default function AccountsScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingConta, setEditingConta] = useState<ContaBancaria | null>(null);
+  const { animatedStyle: headerStyle } = useScreenAnimations(0);
+  const [accountAnims, setAccountAnims] = useState<Animated.Value[]>([]);
   
   // Formulário
   const [codigoContaBanco, setCodigoContaBanco] = useState('');
@@ -34,6 +37,20 @@ export default function AccountsScreen() {
       setLoading(false);
     }
   }, [userId]); // ✅ Dependência correta
+
+  useEffect(() => {
+    const anims = contas.map(() => new Animated.Value(0));
+    setAccountAnims(anims);
+    
+    anims.forEach((anim, index) => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 400,
+        delay: 100 + (index * 50),
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [contas.length]);
 
   const carregarContas = async (userId: string) => {
     try {
@@ -250,16 +267,29 @@ export default function AccountsScreen() {
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
+        <Animated.View style={[styles.header, headerStyle]}>
           <ThemedText type="title" style={styles.title}>Contas Bancárias</ThemedText>
           <ThemedText style={styles.subtitle}>
             {contas.length} conta{contas.length !== 1 ? 's' : ''} conectada{contas.length !== 1 ? 's' : ''}
           </ThemedText>
-        </View>
+        </Animated.View>
 
         <View style={styles.accountsList}>
-          {contas.map((conta) => (
-            <GlassContainer key={conta.id} style={styles.accountCard}>
+          {contas.map((conta, index) => (
+            <Animated.View
+              key={conta.id}
+              style={accountAnims[index] ? {
+                opacity: accountAnims[index],
+                transform: [
+                  {
+                    translateX: accountAnims[index].interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-20, 0],
+                    }),
+                  },
+                ],
+              } : { opacity: 0 }}>
+              <GlassContainer style={styles.accountCard}>
               <View style={styles.accountHeader}>
                 <View style={styles.bankIcon}>
                   <IconSymbol name="building.columns.fill" size={24} color="#00b09b" />
@@ -293,6 +323,7 @@ export default function AccountsScreen() {
                 </ThemedText>
               </View>
             </GlassContainer>
+            </Animated.View>
           ))}
         </View>
 

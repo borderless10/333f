@@ -2,13 +2,14 @@ import { AnimatedBackground } from '@/components/animated-background';
 import { GlassContainer } from '@/components/glass-container';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { buscarTransacoes, type TransactionWithAccount } from '@/lib/services/transactions';
 import { formatCurrency } from '@/lib/utils/currency';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
+import { useScreenAnimations } from '@/hooks/use-screen-animations';
 
 type FilterType = 'all' | 'income' | 'expense';
 type SortType = 'date-desc' | 'date-asc' | 'value-desc' | 'value-asc' | 'name-asc' | 'name-desc';
@@ -22,6 +23,12 @@ export default function TransactionsScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
+  const { animatedStyle: headerStyle } = useScreenAnimations(0);
+  const { animatedStyle: searchStyle } = useScreenAnimations(100);
+  const { animatedStyle: filtersStyle } = useScreenAnimations(150);
+  
+  // Animações para itens da lista
+  const [transactionAnims, setTransactionAnims] = useState<Animated.Value[]>([]);
 
   // Carrega transações do Supabase
   useEffect(() => {
@@ -113,6 +120,21 @@ export default function TransactionsScreen() {
     return result;
   }, [transactions, filter, searchQuery, sortBy]);
 
+  // Animações para itens da lista (após filteredAndSortedTransactions ser definido)
+  useEffect(() => {
+    const anims = filteredAndSortedTransactions.map(() => new Animated.Value(0));
+    setTransactionAnims(anims);
+    
+    anims.forEach((anim, index) => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 400,
+        delay: 200 + (index * 50),
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [filteredAndSortedTransactions.length]);
+
   const FilterButton = ({ type, label }: { type: FilterType; label: string }) => {
     const isActive = filter === type;
     return (
@@ -151,15 +173,16 @@ export default function TransactionsScreen() {
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
+        <Animated.View style={[styles.header, headerStyle]}>
           <ThemedText type="title" style={styles.title}>Transações</ThemedText>
           <ThemedText style={styles.subtitle}>
             {transactions.length} transaç{transactions.length !== 1 ? 'ões' : 'ão'} registrada{transactions.length !== 1 ? 's' : ''}
           </ThemedText>
-        </View>
+        </Animated.View>
 
         {/* Search Bar */}
-        <GlassContainer style={styles.searchContainer}>
+        <Animated.View style={searchStyle}>
+          <GlassContainer style={styles.searchContainer}>
           <View style={styles.searchInputWrapper}>
             <IconSymbol name="magnifyingglass" size={20} color="rgba(255, 255, 255, 0.6)" />
             <TextInput
@@ -181,9 +204,10 @@ export default function TransactionsScreen() {
             )}
           </View>
         </GlassContainer>
+        </Animated.View>
 
         {/* Sort and Filters Row */}
-        <View style={styles.controlsRow}>
+        <Animated.View style={[styles.controlsRow, filtersStyle]}>
           {/* Sort Selector */}
           <GlassContainer style={styles.sortContainer}>
             <IconSymbol name="arrow.up.arrow.down" size={16} color="rgba(255, 255, 255, 0.6)" />
@@ -203,14 +227,14 @@ export default function TransactionsScreen() {
               </TouchableOpacity>
             </View>
           </GlassContainer>
-        </View>
+        </Animated.View>
 
         {/* Filters */}
-        <View style={styles.filters}>
+        <Animated.View style={[styles.filters, filtersStyle]}>
           <FilterButton type="all" label="Todas" />
           <FilterButton type="income" label="Receitas" />
           <FilterButton type="expense" label="Despesas" />
-        </View>
+        </Animated.View>
 
         {/* Transactions List */}
         {filteredAndSortedTransactions.length === 0 ? (
@@ -225,12 +249,25 @@ export default function TransactionsScreen() {
           </GlassContainer>
         ) : (
           <View style={styles.transactionsList}>
-            {filteredAndSortedTransactions.map((transaction) => {
+            {filteredAndSortedTransactions.map((transaction, index) => {
               const tipo = transaction.tipo === 'receita' ? 'income' : 'expense';
               const contaDescricao = transaction.contas_bancarias?.descricao || 'Sem conta';
               
               return (
-                <GlassContainer key={transaction.id} style={styles.transactionCard}>
+                <Animated.View
+                  key={transaction.id}
+                  style={transactionAnims[index] ? {
+                    opacity: transactionAnims[index],
+                    transform: [
+                      {
+                        translateX: transactionAnims[index].interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-20, 0],
+                        }),
+                      },
+                    ],
+                  } : { opacity: 0 }}>
+                  <GlassContainer style={styles.transactionCard}>
                   <View style={styles.transactionHeader}>
                     <View
                       style={[
@@ -269,8 +306,9 @@ export default function TransactionsScreen() {
                         {formatDate(transaction.data)}
                       </ThemedText>
                     </View>
-                  </View>
-                </GlassContainer>
+                    </View>
+                  </GlassContainer>
+                </Animated.View>
               );
             })}
           </View>
