@@ -19,11 +19,14 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import {
   buscarUsuariosComPerfis,
   criarPerfil,
   atualizarPerfil,
   deletarPerfil,
+  deletarUsuarioPermanentemente,
+  criarNovoUsuario,
   getRoleName,
   getRoleDescription,
   getRoleColor,
@@ -36,6 +39,7 @@ type FilterRole = 'all' | 'admin' | 'analista' | 'viewer' | 'no_profile';
 export default function UsersScreen() {
   const insets = useSafeAreaInsets();
   const { userId, refreshUserRole } = useAuth();
+  const { isAdmin } = usePermissions();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
 
   const [users, setUsers] = useState<UserWithProfile[]>([]);
@@ -45,6 +49,14 @@ export default function UsersScreen() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('viewer');
   const [filterRole, setFilterRole] = useState<FilterRole>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Estados para modal de criar novo usuário
+  const [newUserModalVisible, setNewUserModalVisible] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<UserRole>('viewer');
+  const [creatingUser, setCreatingUser] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -121,36 +133,137 @@ export default function UsersScreen() {
 
   const handleRemoveProfile = (user: UserWithProfile) => {
     if (user.id === userId) {
-      Alert.alert('Aviso', 'Você não pode remover seu próprio perfil.');
-      return;
-    }
-
-    if (!user.has_profile) {
-      Alert.alert('Aviso', 'Este usuário não possui perfil.');
+      Alert.alert('Aviso', 'Você não pode deletar sua própria conta.');
       return;
     }
 
     Alert.alert(
-      'Confirmar remoção',
-      `Deseja realmente remover o perfil de "${user.email}"?`,
+      'Confirmar exclusão permanente',
+      `⚠️ ATENÇÃO: Esta ação não pode ser desfeita!\n\n` +
+      `Deseja realmente deletar permanentemente o usuário "${user.email}"?\n\n` +
+      `O usuário será removido completamente do sistema, incluindo:\n` +
+      `• Perfil\n` +
+      `• Conta de autenticação\n` +
+      `• Todos os dados associados`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'Remover',
+          text: 'Deletar Permanentemente',
           style: 'destructive',
           onPress: async () => {
             try {
-              await deletarPerfil(user.id);
-              Alert.alert('Sucesso', 'Perfil removido com sucesso!');
+              await deletarUsuarioPermanentemente(user.id);
+              Alert.alert('Sucesso', 'Usuário deletado permanentemente do sistema!');
               await loadUsers();
             } catch (error: any) {
-              console.error('Erro ao remover perfil:', error);
-              Alert.alert('Erro', error.message || 'Não foi possível remover o perfil');
+              console.error('Erro ao deletar usuário:', error);
+              
+              // Se o erro menciona que precisa deletar manualmente, mostra mensagem específica
+              if (error.message?.includes('Execute o SQL')) {
+                Alert.alert(
+                  'Perfil Removido',
+                  'O perfil foi removido, mas o usuário ainda existe no sistema.\n\n' +
+                  'Para deletar completamente, execute este SQL no Supabase:\n\n' +
+                  `DELETE FROM auth.users WHERE id = '${user.id}';`
+                );
+                await loadUsers();
+              } else {
+                Alert.alert('Erro', error.message || 'Não foi possível deletar o usuário');
+              }
             }
           },
         },
       ]
     );
+  };
+
+  const openNewUserModal = () => {
+    setNewUserName('');
+    setNewUserEmail('');
+    setNewUserPassword('');
+    setNewUserRole('viewer');
+    setNewUserModalVisible(true);
+  };
+
+  const closeNewUserModal = () => {
+    setNewUserModalVisible(false);
+    setNewUserName('');
+    setNewUserEmail('');
+    setNewUserPassword('');
+    setNewUserRole('viewer');
+  };
+
+  const validarEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const handleCreateUser = async () => {
+    // Validações
+    if (!newUserEmail.trim()) {
+      Alert.alert('Erro', 'Por favor, informe o email do usuário.');
+      return;
+    }
+
+    if (!validarEmail(newUserEmail.trim())) {
+      Alert.alert('Erro', 'Por favor, insira um email válido.');
+      return;
+    }
+
+    if (!newUserPassword || newUserPassword.length < 6) {
+      Alert.alert('Erro', 'A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+
+    setCreatingUser(true);
+
+    try {
+      const resultado = await criarNovoUsuario(
+        newUserEmail.trim(),
+        newUserPassword,
+        newUserRole,
+        newUserName.trim() || undefined
+      );
+
+      // Aguarda um pouco para garantir que a sessão do admin foi restaurada
+      // e que o onAuthStateChange tenha processado a restauração
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Força refresh da role para garantir que está atualizada
+      await refreshUserRole();
+
+      // Verifica se o email foi confirmado
+      const emailConfirmado = resultado?.data?.emailConfirmado;
+      
+      if (emailConfirmado === false) {
+        // Email não foi confirmado automaticamente, mas usuário foi criado
+        Alert.alert(
+          'Usuário Criado',
+          'Usuário criado com sucesso!\n\n' +
+          '⚠️ O email não foi confirmado automaticamente.\n\n' +
+          'SOLUÇÃO RÁPIDA:\n' +
+          '1. Acesse Supabase Dashboard\n' +
+          '2. Authentication → Providers → Email\n' +
+          '3. Desabilite "Confirm email"\n\n' +
+          'OU execute este SQL:\n' +
+          `UPDATE auth.users SET email_confirmed_at = NOW() WHERE email = '${newUserEmail.trim()}';`,
+          [
+            { text: 'Entendi', style: 'default' },
+          ]
+        );
+      } else {
+        // Tudo certo, email confirmado
+        Alert.alert('Sucesso', 'Usuário criado com sucesso! O usuário já pode fazer login.');
+      }
+      
+      closeNewUserModal();
+      await loadUsers();
+    } catch (error: any) {
+      console.error('Erro ao criar usuário:', error);
+      Alert.alert('Erro', error.message || 'Não foi possível criar o usuário');
+    } finally {
+      setCreatingUser(false);
+    }
   };
 
   // Filtros
@@ -185,12 +298,24 @@ export default function UsersScreen() {
             contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
             showsVerticalScrollIndicator={false}>
             <View style={styles.header}>
-              <ThemedText type="title" style={styles.title}>
-                Gerenciar Usuários
-              </ThemedText>
-              <ThemedText style={styles.subtitle}>
-                {users.length} usuário{users.length !== 1 ? 's' : ''} cadastrado{users.length !== 1 ? 's' : ''}
-              </ThemedText>
+              <View style={styles.headerRow}>
+                <View style={styles.headerTextContainer}>
+                  <ThemedText type="title" style={styles.title}>
+                    Gerenciar Usuários
+                  </ThemedText>
+                  <ThemedText style={styles.subtitle}>
+                    {users.length} usuário{users.length !== 1 ? 's' : ''} cadastrado{users.length !== 1 ? 's' : ''}
+                  </ThemedText>
+                </View>
+                {isAdmin && (
+                  <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={openNewUserModal}
+                    activeOpacity={0.7}>
+                    <IconSymbol name="plus.circle.fill" size={28} color="#00b09b" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             {/* Search Bar */}
@@ -345,15 +470,13 @@ export default function UsersScreen() {
                               {user.has_profile ? 'Alterar Perfil' : 'Atribuir Perfil'}
                             </Text>
                           </TouchableOpacity>
-                          {user.has_profile && (
-                            <TouchableOpacity
-                              onPress={() => handleRemoveProfile(user)}
-                              style={[styles.actionButton, styles.actionButtonDanger]}
-                              activeOpacity={0.7}>
-                              <IconSymbol name="trash" size={16} color="#EF4444" />
-                              <Text style={styles.actionButtonTextDanger}>Remover</Text>
-                            </TouchableOpacity>
-                          )}
+                          <TouchableOpacity
+                            onPress={() => handleRemoveProfile(user)}
+                            style={[styles.actionButton, styles.actionButtonDanger]}
+                            activeOpacity={0.7}>
+                            <IconSymbol name="trash" size={16} color="#EF4444" />
+                            <Text style={styles.actionButtonTextDanger}>Deletar Usuário</Text>
+                          </TouchableOpacity>
                         </View>
                       )}
                     </GlassContainer>
@@ -516,6 +639,209 @@ export default function UsersScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* Modal de Criar Novo Usuário */}
+        <Modal
+          visible={newUserModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={closeNewUserModal}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
+              <AnimatedBackground />
+              <ScrollView
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={false}>
+                <View style={styles.modalHeader}>
+                  <ThemedText type="title" style={styles.modalTitle}>
+                    Criar Novo Usuário
+                  </ThemedText>
+                  <TouchableOpacity onPress={closeNewUserModal} style={styles.closeButton}>
+                    <IconSymbol name="xmark.circle.fill" size={28} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.formContainer}>
+                  {/* Nome (opcional) */}
+                  <View style={styles.inputGroup}>
+                    <ThemedText style={styles.inputLabel}>Nome (opcional)</ThemedText>
+                    <GlassContainer style={styles.inputContainer}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Nome do usuário"
+                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                        value={newUserName}
+                        onChangeText={setNewUserName}
+                        autoCapitalize="words"
+                      />
+                    </GlassContainer>
+                  </View>
+
+                  {/* Email */}
+                  <View style={styles.inputGroup}>
+                    <ThemedText style={styles.inputLabel}>Email *</ThemedText>
+                    <GlassContainer style={styles.inputContainer}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="usuario@exemplo.com"
+                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                        value={newUserEmail}
+                        onChangeText={setNewUserEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                    </GlassContainer>
+                  </View>
+
+                  {/* Senha */}
+                  <View style={styles.inputGroup}>
+                    <ThemedText style={styles.inputLabel}>Senha Temporária *</ThemedText>
+                    <GlassContainer style={styles.inputContainer}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Mínimo 6 caracteres"
+                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                        value={newUserPassword}
+                        onChangeText={setNewUserPassword}
+                        secureTextEntry
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                    </GlassContainer>
+                    <ThemedText style={styles.inputHint}>
+                      O usuário poderá alterar esta senha após o primeiro login
+                    </ThemedText>
+                  </View>
+
+                  {/* Perfil */}
+                  <View style={styles.inputGroup}>
+                    <ThemedText style={styles.sectionTitle}>Selecione o Perfil:</ThemedText>
+
+                    {/* Admin */}
+                    <TouchableOpacity
+                      style={[styles.roleOption, newUserRole === 'admin' && styles.roleOptionActive]}
+                      onPress={() => setNewUserRole('admin')}
+                      activeOpacity={0.7}>
+                      <View style={styles.roleOptionHeader}>
+                        <View
+                          style={[
+                            styles.roleOptionIcon,
+                            newUserRole === 'admin' && styles.roleOptionIconActive,
+                          ]}>
+                          <IconSymbol
+                            name="checkmark"
+                            size={20}
+                            color={newUserRole === 'admin' ? '#FFFFFF' : 'transparent'}
+                          />
+                        </View>
+                        <View style={styles.roleOptionContent}>
+                          <View
+                            style={[
+                              styles.roleOptionBadge,
+                              { backgroundColor: `${getRoleColor('admin')}20` },
+                            ]}>
+                            <Text style={[styles.roleOptionBadgeText, { color: getRoleColor('admin') }]}>
+                              {getRoleName('admin')}
+                            </Text>
+                          </View>
+                          <ThemedText style={styles.roleOptionDescription}>
+                            {getRoleDescription('admin')}
+                          </ThemedText>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Analista */}
+                    <TouchableOpacity
+                      style={[styles.roleOption, newUserRole === 'analista' && styles.roleOptionActive]}
+                      onPress={() => setNewUserRole('analista')}
+                      activeOpacity={0.7}>
+                      <View style={styles.roleOptionHeader}>
+                        <View
+                          style={[
+                            styles.roleOptionIcon,
+                            newUserRole === 'analista' && styles.roleOptionIconActive,
+                          ]}>
+                          <IconSymbol
+                            name="checkmark"
+                            size={20}
+                            color={newUserRole === 'analista' ? '#FFFFFF' : 'transparent'}
+                          />
+                        </View>
+                        <View style={styles.roleOptionContent}>
+                          <View
+                            style={[
+                              styles.roleOptionBadge,
+                              { backgroundColor: `${getRoleColor('analista')}20` },
+                            ]}>
+                            <Text style={[styles.roleOptionBadgeText, { color: getRoleColor('analista') }]}>
+                              {getRoleName('analista')}
+                            </Text>
+                          </View>
+                          <ThemedText style={styles.roleOptionDescription}>
+                            {getRoleDescription('analista')}
+                          </ThemedText>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Viewer */}
+                    <TouchableOpacity
+                      style={[styles.roleOption, newUserRole === 'viewer' && styles.roleOptionActive]}
+                      onPress={() => setNewUserRole('viewer')}
+                      activeOpacity={0.7}>
+                      <View style={styles.roleOptionHeader}>
+                        <View
+                          style={[
+                            styles.roleOptionIcon,
+                            newUserRole === 'viewer' && styles.roleOptionIconActive,
+                          ]}>
+                          <IconSymbol
+                            name="checkmark"
+                            size={20}
+                            color={newUserRole === 'viewer' ? '#FFFFFF' : 'transparent'}
+                          />
+                        </View>
+                        <View style={styles.roleOptionContent}>
+                          <View
+                            style={[
+                              styles.roleOptionBadge,
+                              { backgroundColor: `${getRoleColor('viewer')}20` },
+                            ]}>
+                            <Text style={[styles.roleOptionBadgeText, { color: getRoleColor('viewer') }]}>
+                              {getRoleName('viewer')}
+                            </Text>
+                          </View>
+                          <ThemedText style={styles.roleOptionDescription}>
+                            {getRoleDescription('viewer')}
+                          </ThemedText>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.modalActions}>
+                    <Button
+                      title={creatingUser ? 'Criando...' : 'Criar Usuário'}
+                      onPress={handleCreateUser}
+                      style={styles.saveButton}
+                      disabled={creatingUser}
+                    />
+                    <Button
+                      title="Cancelar"
+                      onPress={closeNewUserModal}
+                      variant="outline"
+                      style={styles.cancelButton}
+                      disabled={creatingUser}
+                    />
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </View>
     </ProtectedRoute>
   );
@@ -545,6 +871,14 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 24,
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
   title: {
     color: '#FFFFFF',
   },
@@ -552,6 +886,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
     color: 'rgba(255, 255, 255, 0.8)',
+  },
+  addButton: {
+    padding: 4,
+    marginLeft: 12,
   },
   searchContainer: {
     marginBottom: 16,
@@ -818,5 +1156,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  inputContainer: {
+    padding: 12,
+  },
+  input: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    paddingVertical: 8,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 4,
   },
 });

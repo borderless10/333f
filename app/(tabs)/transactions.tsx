@@ -2,6 +2,8 @@ import { AnimatedBackground } from '@/components/animated-background';
 import { GlassContainer } from '@/components/glass-container';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { NewTransactionModal } from '@/components/new-transaction-modal';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +22,7 @@ export default function TransactionsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [transactions, setTransactions] = useState<TransactionWithAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [newTransactionVisible, setNewTransactionVisible] = useState(false);
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
@@ -174,10 +177,20 @@ export default function TransactionsScreen() {
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.header, headerStyle]}>
-          <ThemedText type="title" style={styles.title}>Transações</ThemedText>
-          <ThemedText style={styles.subtitle}>
-            {transactions.length} transaç{transactions.length !== 1 ? 'ões' : 'ão'} registrada{transactions.length !== 1 ? 's' : ''}
-          </ThemedText>
+          <View style={styles.headerRow}>
+            <View style={styles.headerTextContainer}>
+              <ThemedText type="title" style={styles.title}>Transações</ThemedText>
+              <ThemedText style={styles.subtitle}>
+                {transactions.length} transaç{transactions.length !== 1 ? 'ões' : 'ão'} registrada{transactions.length !== 1 ? 's' : ''}
+              </ThemedText>
+            </View>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setNewTransactionVisible(true)}
+              activeOpacity={0.7}>
+              <MaterialIcons name="add-circle" size={28} color="#00b09b" />
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
         {/* Search Bar */}
@@ -314,6 +327,18 @@ export default function TransactionsScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Modal de Nova Transação */}
+      <NewTransactionModal
+        visible={newTransactionVisible}
+        onClose={() => {
+          setNewTransactionVisible(false);
+        }}
+        onSuccess={async () => {
+          // Recarregar transações após criar
+          await loadTransactions();
+        }}
+      />
     </View>
   );
 }
@@ -354,6 +379,14 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 24,
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
   title: {
     color: '#FFFFFF',
   },
@@ -361,6 +394,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
     color: 'rgba(255, 255, 255, 0.8)',
+  },
+  addButton: {
+    padding: 8,
+    marginLeft: 12,
   },
   searchContainer: {
     marginBottom: 12,

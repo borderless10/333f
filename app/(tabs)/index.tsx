@@ -536,6 +536,7 @@ export default function DashboardScreen() {
           // Recarregar dados após criar transação
           onRefresh();
         }}
+        returnToHome={true}
       />
     </View>
   );

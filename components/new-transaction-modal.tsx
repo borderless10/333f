@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,12 +11,16 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
+import { DatePicker } from './date-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { AnimatedBackground } from './animated-background';
 import { GlassContainer } from './glass-container';
 import { ThemedText } from './themed-text';
 import { IconSymbol } from './ui/icon-symbol';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Button } from './ui/button';
+import { CurrencyInput } from './currency-input';
 import { criarTransacao, type Transaction } from '@/lib/services/transactions';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,18 +29,20 @@ interface NewTransactionModalProps {
   visible: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  returnToHome?: boolean;
 }
 
-export function NewTransactionModal({ visible, onClose, onSuccess }: NewTransactionModalProps) {
+export function NewTransactionModal({ visible, onClose, onSuccess, returnToHome = false }: NewTransactionModalProps) {
   const { userId } = useAuth();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [contas, setContas] = useState<ContaBancaria[]>([]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   
   // Formulário
   const [descricao, setDescricao] = useState('');
-  const [valor, setValor] = useState('');
-  const [data, setData] = useState('');
+  const [valor, setValor] = useState('0');
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [tipo, setTipo] = useState<'receita' | 'despesa'>('receita');
   const [categoria, setCategoria] = useState('');
   const [contaBancariaId, setContaBancariaId] = useState<number | null>(null);
@@ -43,11 +50,10 @@ export function NewTransactionModal({ visible, onClose, onSuccess }: NewTransact
   useEffect(() => {
     if (visible && userId) {
       loadAccounts();
-      // Definir data padrão como hoje
-      const today = new Date();
-      setData(today.toISOString().split('T')[0]);
       // Limpar formulário
       resetForm();
+      // Garantir que valor seja inicializado
+      setValor('0');
     }
   }, [visible, userId]);
 
@@ -62,12 +68,24 @@ export function NewTransactionModal({ visible, onClose, onSuccess }: NewTransact
 
   const resetForm = () => {
     setDescricao('');
-    setValor('');
-    const today = new Date();
-    setData(today.toISOString().split('T')[0]);
+    setValor('0');
+    setSelectedDate(new Date());
     setTipo('receita');
     setCategoria('');
     setContaBancariaId(null);
+    setShowDatePicker(false);
+  };
+
+  const formatDate = (date: Date): string => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const formatDateDisplay = (date: Date): string => {
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   };
 
   const handleSave = async () => {
@@ -77,19 +95,14 @@ export function NewTransactionModal({ visible, onClose, onSuccess }: NewTransact
       return;
     }
 
-    if (!valor.trim()) {
+    if (!valor || valor === '0' || valor.trim() === '') {
       Alert.alert('Erro', 'Por favor, preencha o valor.');
       return;
     }
 
-    const valorNum = parseFloat(valor.replace(/[^\d,.-]/g, '').replace(',', '.'));
+    const valorNum = parseFloat(valor);
     if (isNaN(valorNum) || valorNum <= 0) {
       Alert.alert('Erro', 'Por favor, insira um valor válido maior que zero.');
-      return;
-    }
-
-    if (!data) {
-      Alert.alert('Erro', 'Por favor, selecione uma data.');
       return;
     }
 
@@ -110,7 +123,7 @@ export function NewTransactionModal({ visible, onClose, onSuccess }: NewTransact
         codigo_empresa: userId,
         descricao: descricao.trim(),
         valor: valorNum,
-        data,
+        data: formatDate(selectedDate),
         tipo,
         categoria: categoria.trim(),
         conta_bancaria_id: contaBancariaId,
@@ -118,15 +131,29 @@ export function NewTransactionModal({ visible, onClose, onSuccess }: NewTransact
 
       await criarTransacao(transacao);
       
-      Alert.alert('Sucesso', 'Transação criada com sucesso!', [
-        {
-          text: 'OK',
-          onPress: () => {
-            onSuccess?.();
-            handleClose();
+      // Chamar onSuccess ANTES de fechar para garantir atualização
+      if (onSuccess) {
+        // Aguardar um pouco para garantir que a transação foi salva
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await onSuccess();
+      }
+      
+      // Fechar modal
+      handleClose();
+      
+      // Mostrar alert após fechar
+      setTimeout(() => {
+        Alert.alert('Sucesso', 'Transação criada com sucesso!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (returnToHome) {
+                router.push('/(tabs)/');
+              }
+            },
           },
-        },
-      ]);
+        ]);
+      }, 200);
     } catch (error: any) {
       console.error('Erro ao criar transação:', error);
       Alert.alert('Erro', error.message || 'Não foi possível criar a transação. Tente novamente.');
@@ -140,10 +167,9 @@ export function NewTransactionModal({ visible, onClose, onSuccess }: NewTransact
     onClose();
   };
 
-  const formatCurrencyInput = (text: string) => {
-    // Remove tudo exceto números, vírgula e ponto
-    const cleaned = text.replace(/[^\d,.-]/g, '');
-    setValor(cleaned);
+  const handleDateConfirm = (date: Date) => {
+    setSelectedDate(date);
+    setShowDatePicker(false);
   };
 
   return (
@@ -227,25 +253,31 @@ export function NewTransactionModal({ visible, onClose, onSuccess }: NewTransact
             {/* Valor */}
             <View style={styles.section}>
               <ThemedText style={styles.label}>Valor *</ThemedText>
-              <TextInput
-                style={styles.input}
-                placeholder="0,00"
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              <CurrencyInput
                 value={valor}
-                onChangeText={formatCurrencyInput}
-                keyboardType="numeric"
+                onChangeText={setValor}
+                placeholder="R$ 0,00"
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
               />
             </View>
 
             {/* Data */}
             <View style={styles.section}>
               <ThemedText style={styles.label}>Data *</ThemedText>
-              <TextInput
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                value={data}
-                onChangeText={setData}
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => setShowDatePicker(true)}
+                activeOpacity={0.7}>
+                <MaterialIcons name="calendar-today" size={20} color="rgba(255, 255, 255, 0.7)" />
+                <ThemedText style={styles.dateButtonText}>
+                  {formatDateDisplay(selectedDate)}
+                </ThemedText>
+              </TouchableOpacity>
+              <DatePicker
+                visible={showDatePicker}
+                value={selectedDate}
+                onConfirm={handleDateConfirm}
+                onCancel={() => setShowDatePicker(false)}
               />
             </View>
 
@@ -377,6 +409,21 @@ const styles = StyleSheet.create({
     padding: 12,
     color: '#FFFFFF',
     fontSize: 16,
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 8,
+    padding: 12,
+    gap: 8,
+  },
+  dateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    flex: 1,
   },
   typeButtons: {
     flexDirection: 'row',
