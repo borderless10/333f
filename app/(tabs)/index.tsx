@@ -3,8 +3,10 @@ import { CSVImportModal } from '@/components/csv-import-modal';
 import { GlassContainer } from '@/components/glass-container';
 import { NewTransactionModal } from '@/components/new-transaction-modal';
 import { ReportsModal } from '@/components/reports-modal';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useCompany } from '@/contexts/CompanyContext';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
 import React from 'react';
@@ -17,6 +19,7 @@ export default function DashboardScreen() {
   const [reportsVisible, setReportsVisible] = React.useState(false);
   const [newTransactionVisible, setNewTransactionVisible] = React.useState(false);
   const insets = useSafeAreaInsets();
+  const { selectedCompany } = useCompany();
 
   // Animações
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -183,18 +186,16 @@ export default function DashboardScreen() {
         {/* Header */}
         <Animated.View 
           style={[
-            styles.header,
             {
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
             },
           ]}>
-          <ThemedText type="title" style={styles.greeting}>
-            Olá, Empresa
-          </ThemedText>
-          <ThemedText style={styles.subtitle}>
-            Resumo financeiro
-          </ThemedText>
+          <ScreenHeader
+            title={`Olá, ${selectedCompany?.nome_fantasia || selectedCompany?.razao_social || 'Empresa'}`}
+            subtitle="Resumo financeiro"
+            showCompanySelector={true}
+          />
         </Animated.View>
 
         {/* Financial Cards */}

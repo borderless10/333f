@@ -46,20 +46,34 @@ export async function buscarPerfilUsuario(userId: string) {
  * Usa função RPC no Supabase para acessar auth.users
  */
 export async function buscarUsuariosComPerfis() {
-  const { data, error } = await supabase.rpc('buscar_usuarios_com_perfis');
+  try {
+    console.log('[buscarUsuariosComPerfis] Iniciando busca de usuários...');
+    const { data, error } = await supabase.rpc('buscar_usuarios_com_perfis');
 
-  if (error) {
-    console.error('Erro ao buscar usuários:', error);
-    return { data: null, error };
+    if (error) {
+      console.error('[buscarUsuariosComPerfis] Erro ao buscar usuários:', error);
+      return { data: null, error };
+    }
+
+    console.log('[buscarUsuariosComPerfis] Usuários encontrados:', data?.length || 0);
+    return { data: data as UserWithProfile[], error: null };
+  } catch (err: any) {
+    console.error('[buscarUsuariosComPerfis] Exceção ao buscar usuários:', err);
+    return { data: null, error: err };
   }
-
-  return { data: data as UserWithProfile[], error: null };
 }
 
 /**
  * Cria um novo perfil para um usuário
  */
 export async function criarPerfil(userId: string, role: UserRole) {
+  // Valida o role antes de inserir
+  if (!role || !['admin', 'analista', 'viewer'].includes(role)) {
+    throw new Error(`Role inválido: ${role}. Deve ser 'admin', 'analista' ou 'viewer'`);
+  }
+  
+  console.log(`[criarPerfil] Criando perfil para userId: ${userId}, role: ${role}`);
+  
   const { data, error } = await supabase
     .from('perfis')
     .insert([{ usuario_id: userId, role }])
@@ -67,7 +81,13 @@ export async function criarPerfil(userId: string, role: UserRole) {
     .single();
 
   if (error) {
-    console.error('Erro ao criar perfil:', error);
+    console.error('[criarPerfil] Erro ao criar perfil:', error);
+    console.error('[criarPerfil] Detalhes:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
     
     if (error.message.includes('duplicate') || error.message.includes('unique')) {
       throw new Error('Este usuário já possui um perfil');
@@ -76,6 +96,7 @@ export async function criarPerfil(userId: string, role: UserRole) {
     throw error;
   }
 
+  console.log('[criarPerfil] Perfil criado com sucesso:', data);
   return data;
 }
 
@@ -179,6 +200,12 @@ export async function criarNovoUsuario(
   role: UserRole,
   nome?: string
 ) {
+  // Valida o role antes de prosseguir
+  if (!role || !['admin', 'analista', 'viewer'].includes(role)) {
+    throw new Error(`Role inválido: ${role}. Deve ser 'admin', 'analista' ou 'viewer'`);
+  }
+  
+  console.log(`[criarNovoUsuario] Iniciando criação de usuário com role: ${role}`);
   // Salva a sessão atual do admin antes de criar o novo usuário
   const { data: currentSession } = await supabase.auth.getSession();
   const adminSession = currentSession?.session;
@@ -189,6 +216,7 @@ export async function criarNovoUsuario(
   }
 
   // Primeiro, tenta usar uma função RPC se existir
+  // NOTA: Mesmo se a RPC existir, vamos sempre criar o perfil manualmente para garantir
   const { data: rpcData, error: rpcError } = await supabase.rpc('criar_usuario_com_perfil', {
     p_email: email,
     p_password: password,
@@ -196,18 +224,59 @@ export async function criarNovoUsuario(
     p_nome: nome || null,
   });
 
+  // Se a RPC funcionou, ainda precisamos verificar se o perfil foi criado
+  // e criar manualmente se necessário
   if (!rpcError && rpcData) {
-    return { data: rpcData, error: null };
+    console.log('[criarNovoUsuario] RPC retornou sucesso, verificando perfil...');
+    const userIdFromRpc = rpcData.user_id || rpcData.id || rpcData.user?.id;
+    
+    if (!userIdFromRpc) {
+      console.warn('[criarNovoUsuario] RPC retornou sucesso mas sem user_id, continuando com fallback...');
+      // Se a RPC não retornou o ID do usuário, continua com o método fallback
+    } else {
+      // Verifica se o perfil foi criado pela RPC
+      const { data: perfilExistente, error: perfilError } = await buscarPerfilUsuario(userIdFromRpc);
+      
+      if (perfilExistente) {
+        console.log('[criarNovoUsuario] Perfil já existe (criado pela RPC):', perfilExistente);
+        // Verifica se o role está correto
+        if (perfilExistente.role !== role) {
+          console.warn(`[criarNovoUsuario] Role do perfil (${perfilExistente.role}) não corresponde ao esperado (${role}), atualizando...`);
+          try {
+            await atualizarPerfil(userIdFromRpc, role);
+            console.log('[criarNovoUsuario] Role atualizado com sucesso');
+          } catch (updateError: any) {
+            console.error('[criarNovoUsuario] Erro ao atualizar role:', updateError);
+          }
+        }
+        return { data: rpcData, error: null };
+      } else {
+        // Se a RPC não criou o perfil, cria manualmente
+        console.log('[criarNovoUsuario] RPC criou usuário mas não criou perfil, criando perfil manualmente...');
+        try {
+          const perfil = await criarPerfil(userIdFromRpc, role);
+          console.log('[criarNovoUsuario] Perfil criado manualmente com sucesso:', perfil);
+          return { 
+            data: { 
+              ...rpcData, 
+              perfil,
+              emailConfirmado: true 
+            }, 
+            error: null 
+          };
+        } catch (perfilError: any) {
+          console.error('[criarNovoUsuario] Erro ao criar perfil após RPC:', perfilError);
+          throw new Error('Usuário criado pela RPC, mas não foi possível criar o perfil: ' + perfilError.message);
+        }
+      }
+    }
   }
 
   // Cria um cliente Supabase SEPARADO apenas para criar o usuário
   // Isso evita que a sessão do admin seja afetada
-  const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-  
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error('Variáveis de ambiente do Supabase não configuradas');
-  }
+  // Usa os mesmos valores padrão do arquivo supabase.ts
+  const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || "https://wqqxyupgndcpetqzudez.supabase.co";
+  const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxcXh5dXBnbmRjcGV0cXp1ZGV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwODkxMTIsImV4cCI6MjA3OTY2NTExMn0.QS83QorW71kDqlwH9r8NN87QOvA2XXDWpn4O-DSabzc";
   
   const tempSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
@@ -300,9 +369,25 @@ export async function criarNovoUsuario(
     // Cria o perfil usando o cliente principal (agora com sessão do admin restaurada)
     let perfil;
     try {
+      console.log(`Criando perfil para usuário ${novoUserId} com role: ${role}`);
       perfil = await criarPerfil(novoUserId, role);
+      console.log('Perfil criado com sucesso:', perfil);
+      
+      // Verifica se o perfil foi realmente criado
+      const { data: perfilVerificado } = await buscarPerfilUsuario(novoUserId);
+      if (!perfilVerificado) {
+        console.error('Perfil não foi encontrado após criação!');
+        throw new Error('Perfil não foi criado corretamente');
+      }
+      console.log('Perfil verificado com sucesso:', perfilVerificado);
     } catch (perfilError: any) {
       console.error('Erro ao criar perfil:', perfilError);
+      console.error('Detalhes do erro:', {
+        message: perfilError.message,
+        code: perfilError.code,
+        details: perfilError.details,
+        hint: perfilError.hint,
+      });
       throw new Error(
         'Usuário criado, mas não foi possível criar o perfil. ' + perfilError.message
       );

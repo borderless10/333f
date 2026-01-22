@@ -1,3 +1,26 @@
+import { AnimatedBackground } from '@/components/animated-background';
+import { GlassContainer } from '@/components/glass-container';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/contexts/PermissionsContext';
+import { useScrollToTop } from '@/hooks/use-scroll-to-top';
+import {
+  atualizarPerfil,
+  buscarUsuariosComPerfis,
+  criarNovoUsuario,
+  criarPerfil,
+  deletarUsuarioPermanentemente,
+  getRoleColor,
+  getRoleDescription,
+  getRoleName,
+  type UserRole,
+  type UserWithProfile
+} from '@/lib/services/profiles';
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,28 +34,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AnimatedBackground } from '@/components/animated-background';
-import { GlassContainer } from '@/components/glass-container';
-import { ThemedText } from '@/components/themed-text';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/AuthContext';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { useScrollToTop } from '@/hooks/use-scroll-to-top';
-import { usePermissions } from '@/contexts/PermissionsContext';
-import {
-  buscarUsuariosComPerfis,
-  criarPerfil,
-  atualizarPerfil,
-  deletarPerfil,
-  deletarUsuarioPermanentemente,
-  criarNovoUsuario,
-  getRoleName,
-  getRoleDescription,
-  getRoleColor,
-  type UserRole,
-  type UserWithProfile,
-} from '@/lib/services/profiles';
 
 type FilterRole = 'all' | 'admin' | 'analista' | 'viewer' | 'no_profile';
 
@@ -59,30 +60,47 @@ export default function UsersScreen() {
   const [creatingUser, setCreatingUser] = useState(false);
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+    // Só carrega se o usuário estiver autenticado
+    if (userId) {
+      loadUsers();
+    } else {
+      setLoading(false);
+    }
+  }, [userId]);
 
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const { data, error } = await buscarUsuariosComPerfis();
+      console.log('[UsersScreen] Iniciando carregamento de usuários...');
+      
+      const resultado = await buscarUsuariosComPerfis();
+      console.log('[UsersScreen] Resultado da busca:', resultado);
 
-      if (error) {
-        if (error.message?.includes('Acesso negado')) {
+      if (resultado.error) {
+        console.error('[UsersScreen] Erro ao buscar usuários:', resultado.error);
+        if (resultado.error.message?.includes('Acesso negado') || resultado.error.message?.includes('permission denied')) {
           Alert.alert('Acesso Negado', 'Apenas administradores podem acessar esta página.');
         } else {
-          Alert.alert('Erro', 'Não foi possível carregar os usuários');
+          // Não mostra alerta para erros comuns, apenas loga
+          console.warn('[UsersScreen] Erro ao carregar usuários (não crítico):', resultado.error.message);
         }
+        setUsers([]); // Limpa a lista em caso de erro
         return;
       }
 
-      if (data) {
-        setUsers(data);
+      if (resultado.data) {
+        console.log('[UsersScreen] Usuários carregados:', resultado.data.length);
+        setUsers(resultado.data);
+      } else {
+        console.log('[UsersScreen] Nenhum usuário encontrado');
+        setUsers([]); // Garante que a lista está vazia se não houver dados
       }
     } catch (error: any) {
-      console.error('Erro ao carregar usuários:', error);
-      Alert.alert('Erro', error.message || 'Não foi possível carregar os usuários');
+      console.error('[UsersScreen] Exceção ao carregar usuários:', error);
+      setUsers([]); // Limpa a lista em caso de erro
     } finally {
+      // SEMPRE desliga o loading, mesmo em caso de erro
+      console.log('[UsersScreen] Desligando loading...');
       setLoading(false);
     }
   };
@@ -218,51 +236,82 @@ export default function UsersScreen() {
     setCreatingUser(true);
 
     try {
+      console.log('[UsersScreen] Criando usuário com role:', newUserRole);
+      console.log('[UsersScreen] Email:', newUserEmail.trim());
+      console.log('[UsersScreen] Nome:', newUserName.trim() || undefined);
+      
       const resultado = await criarNovoUsuario(
         newUserEmail.trim(),
         newUserPassword,
         newUserRole,
         newUserName.trim() || undefined
       );
+      
+      console.log('[UsersScreen] Resultado da criação:', resultado);
 
-      // Aguarda um pouco para garantir que a sessão do admin foi restaurada
-      // e que o onAuthStateChange tenha processado a restauração
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Força refresh da role para garantir que está atualizada
-      await refreshUserRole();
+      // Fecha o modal primeiro
+      closeNewUserModal();
+      
+      // Garante que o loading seja desligado imediatamente
+      setLoading(false);
+      setCreatingUser(false);
 
       // Verifica se o email foi confirmado
       const emailConfirmado = resultado?.data?.emailConfirmado;
       
-      if (emailConfirmado === false) {
-        // Email não foi confirmado automaticamente, mas usuário foi criado
-        Alert.alert(
-          'Usuário Criado',
-          'Usuário criado com sucesso!\n\n' +
-          '⚠️ O email não foi confirmado automaticamente.\n\n' +
-          'SOLUÇÃO RÁPIDA:\n' +
-          '1. Acesse Supabase Dashboard\n' +
-          '2. Authentication → Providers → Email\n' +
-          '3. Desabilite "Confirm email"\n\n' +
-          'OU execute este SQL:\n' +
-          `UPDATE auth.users SET email_confirmed_at = NOW() WHERE email = '${newUserEmail.trim()}';`,
-          [
-            { text: 'Entendi', style: 'default' },
-          ]
-        );
-      } else {
-        // Tudo certo, email confirmado
-        Alert.alert('Sucesso', 'Usuário criado com sucesso! O usuário já pode fazer login.');
-      }
+      console.log('[UsersScreen] Email confirmado:', emailConfirmado);
       
-      closeNewUserModal();
-      await loadUsers();
+      // Aguarda um pouco para garantir que o modal foi fechado antes de mostrar o Alert
+      setTimeout(() => {
+        if (emailConfirmado === false) {
+          // Email não foi confirmado automaticamente, mas usuário foi criado
+          Alert.alert(
+            'Usuário Criado com Sucesso!',
+            'Usuário criado com sucesso!\n\n' +
+            '⚠️ O email não foi confirmado automaticamente.\n\n' +
+            'SOLUÇÃO RÁPIDA:\n' +
+            '1. Acesse Supabase Dashboard\n' +
+            '2. Authentication → Providers → Email\n' +
+            '3. Desabilite "Confirm email"\n\n' +
+            'OU execute este SQL:\n' +
+            `UPDATE auth.users SET email_confirmed_at = NOW() WHERE email = '${newUserEmail.trim()}';`,
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  console.log('[UsersScreen] Navegando para página inicial...');
+                  router.replace('/(tabs)');
+                }
+              }
+            ]
+          );
+        } else {
+          // Tudo certo, email confirmado
+          Alert.alert(
+            'Usuário Criado com Sucesso!',
+            'Usuário criado com sucesso! O usuário já pode fazer login.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  console.log('[UsersScreen] Navegando para página inicial...');
+                  router.replace('/(tabs)');
+                }
+              }
+            ]
+          );
+        }
+      }, 300);
     } catch (error: any) {
       console.error('Erro ao criar usuário:', error);
-      Alert.alert('Erro', error.message || 'Não foi possível criar o usuário');
-    } finally {
+      // Garante que o loading seja desligado mesmo em caso de erro
+      setLoading(false);
       setCreatingUser(false);
+      
+      // Mostra erro após um pequeno delay para garantir que o estado foi atualizado
+      setTimeout(() => {
+        Alert.alert('Erro', error.message || 'Não foi possível criar o usuário');
+      }, 100);
     }
   };
 
@@ -297,26 +346,17 @@ export default function UsersScreen() {
             style={styles.scrollView}
             contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
             showsVerticalScrollIndicator={false}>
-            <View style={styles.header}>
-              <View style={styles.headerRow}>
-                <View style={styles.headerTextContainer}>
-                  <ThemedText type="title" style={styles.title}>
-                    Gerenciar Usuários
-                  </ThemedText>
-                  <ThemedText style={styles.subtitle}>
-                    {users.length} usuário{users.length !== 1 ? 's' : ''} cadastrado{users.length !== 1 ? 's' : ''}
-                  </ThemedText>
-                </View>
-                {isAdmin && (
-                  <TouchableOpacity
-                    style={styles.addButton}
-                    onPress={openNewUserModal}
-                    activeOpacity={0.7}>
-                    <IconSymbol name="plus.circle.fill" size={28} color="#00b09b" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
+            <ScreenHeader
+              title="Gerenciar
+              Usuários"
+              subtitle={`${users.length} usuário${users.length !== 1 ? 's' : ''} cadastrado${users.length !== 1 ? 's' : ''}`}
+              rightAction={{
+                icon: 'add',
+                onPress: openNewUserModal,
+                visible: isAdmin,
+              }}
+              showCompanySelector={true}
+            />
 
             {/* Search Bar */}
             <GlassContainer style={styles.searchContainer}>

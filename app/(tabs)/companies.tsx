@@ -14,10 +14,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedBackground } from '@/components/animated-background';
 import { GlassContainer } from '@/components/glass-container';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
 import { useScreenAnimations } from '@/hooks/use-screen-animations';
@@ -40,6 +42,7 @@ type FilterStatus = 'all' | 'active' | 'inactive';
 export default function CompaniesScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
+  const { selectedCompany } = useCompany();
   const { canEdit, canDelete, isViewerOnly } = usePermissions();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
   const { animatedStyle: headerStyle } = useScreenAnimations(0);
@@ -70,7 +73,7 @@ export default function CompaniesScreen() {
 
   useEffect(() => {
     loadCompanies();
-  }, [userId]);
+  }, [userId, selectedCompany]);
 
   const loadCompanies = async () => {
     if (!userId) {
@@ -144,6 +147,7 @@ export default function CompaniesScreen() {
     setModalVisible(false);
     setEditingCompany(null);
     setModalError('');
+    resetForm();
   };
 
   const resetForm = () => {
@@ -294,13 +298,17 @@ export default function CompaniesScreen() {
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>
-        <Animated.View style={[styles.header, headerStyle]}>
-          <ThemedText type="title" style={styles.title}>
-            Empresas
-          </ThemedText>
-          <ThemedText style={styles.subtitle}>
-            {companies.length} empresa{companies.length !== 1 ? 's' : ''} cadastrada{companies.length !== 1 ? 's' : ''}
-          </ThemedText>
+        <Animated.View style={headerStyle}>
+          <ScreenHeader
+            title="Empresas"
+            subtitle={`${companies.length} empresa${companies.length !== 1 ? 's' : ''} cadastrada${companies.length !== 1 ? 's' : ''}`}
+            rightAction={{
+              icon: 'add',
+              onPress: openModalAdd,
+              visible: !isViewerOnly,
+            }}
+            showCompanySelector={true}
+          />
         </Animated.View>
 
         {/* Search Bar */}
@@ -472,8 +480,14 @@ export default function CompaniesScreen() {
         animationType="slide"
         transparent={true}
         onRequestClose={closeModal}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={closeModal}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
             <AnimatedBackground />
             <ScrollView
               style={styles.modalScrollView}
@@ -483,8 +497,12 @@ export default function CompaniesScreen() {
                 <ThemedText type="title" style={styles.modalTitle}>
                   {editingCompany ? 'Editar Empresa' : 'Nova Empresa'}
                 </ThemedText>
-                <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-                  <IconSymbol name="xmark.circle.fill" size={28} color="#FFFFFF" />
+                <TouchableOpacity
+                  onPress={closeModal}
+                  style={styles.closeButton}
+                  hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                  activeOpacity={0.7}>
+                  <IconSymbol name="xmark.circle.fill" size={32} color="rgba(255, 255, 255, 0.9)" />
                 </TouchableOpacity>
               </View>
 
@@ -706,8 +724,8 @@ export default function CompaniesScreen() {
                 </View>
               </View>
             </ScrollView>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -916,9 +934,11 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
     flex: 1,
+    maxHeight: '95%',
   },
   modalScrollView: {
     flex: 1,
@@ -938,7 +958,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   closeButton: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    zIndex: 10,
   },
   formContainer: {
     gap: 8,

@@ -1,16 +1,17 @@
 import { AnimatedBackground } from '@/components/animated-background';
 import { GlassContainer } from '@/components/glass-container';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
+import { useScreenAnimations } from '@/hooks/use-screen-animations';
+import { useScrollToTop } from '@/hooks/use-scroll-to-top';
 import { atualizarConta, buscarContas, criarConta, deletarConta, type ContaBancaria } from '@/lib/contas';
-import { supabase } from '@/lib/supabase';
 import React, { useEffect, useState } from 'react';
 import { Alert, Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/contexts/AuthContext';
-import { useScrollToTop } from '@/hooks/use-scroll-to-top';
-import { useScreenAnimations } from '@/hooks/use-screen-animations';
 
 export default function AccountsScreen() {
   const insets = useSafeAreaInsets();
@@ -30,13 +31,15 @@ export default function AccountsScreen() {
   const [descricao, setDescricao] = useState('');
   const [numeroConta, setNumeroConta] = useState('');
 
+  const { selectedCompany } = useCompany();
+
   useEffect(() => {
     if (userId) {
       carregarContas(userId);
     } else {
       setLoading(false);
     }
-  }, [userId]); // ✅ Dependência correta
+  }, [userId, selectedCompany]); // ✅ Dependência correta
 
   useEffect(() => {
     const anims = contas.map(() => new Animated.Value(0));
@@ -267,11 +270,17 @@ export default function AccountsScreen() {
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>
-        <Animated.View style={[styles.header, headerStyle]}>
-          <ThemedText type="title" style={styles.title}>Contas Bancárias</ThemedText>
-          <ThemedText style={styles.subtitle}>
-            {contas.length} conta{contas.length !== 1 ? 's' : ''} conectada{contas.length !== 1 ? 's' : ''}
-          </ThemedText>
+        <Animated.View style={headerStyle}>
+          <ScreenHeader
+            title="Contas 
+            Bancárias"
+            subtitle={`${contas.length} conta${contas.length !== 1 ? 's' : ''} conectada${contas.length !== 1 ? 's' : ''}`}
+            rightAction={{
+              icon: 'add',
+              onPress: abrirModalAdicionar,
+            }}
+            showCompanySelector={true}
+          />
         </Animated.View>
 
         <View style={styles.accountsList}>

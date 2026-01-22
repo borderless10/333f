@@ -1,5 +1,6 @@
 import { AnimatedBackground } from '@/components/animated-background';
 import { GlassContainer } from '@/components/glass-container';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { NewTransactionModal } from '@/components/new-transaction-modal';
@@ -8,6 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 import { buscarTransacoes, type TransactionWithAccount } from '@/lib/services/transactions';
 import { formatCurrency } from '@/lib/utils/currency';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
@@ -25,6 +27,7 @@ export default function TransactionsScreen() {
   const [newTransactionVisible, setNewTransactionVisible] = useState(false);
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
+  const { selectedCompany } = useCompany();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
   const { animatedStyle: headerStyle } = useScreenAnimations(0);
   const { animatedStyle: searchStyle } = useScreenAnimations(100);
@@ -36,7 +39,7 @@ export default function TransactionsScreen() {
   // Carrega transações do Supabase
   useEffect(() => {
     loadTransactions();
-  }, [userId]);
+  }, [userId, selectedCompany]);
 
   const loadTransactions = async () => {
     if (!userId) {
@@ -176,21 +179,16 @@ export default function TransactionsScreen() {
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>
-        <Animated.View style={[styles.header, headerStyle]}>
-          <View style={styles.headerRow}>
-            <View style={styles.headerTextContainer}>
-              <ThemedText type="title" style={styles.title}>Transações</ThemedText>
-              <ThemedText style={styles.subtitle}>
-                {transactions.length} transaç{transactions.length !== 1 ? 'ões' : 'ão'} registrada{transactions.length !== 1 ? 's' : ''}
-              </ThemedText>
-            </View>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setNewTransactionVisible(true)}
-              activeOpacity={0.7}>
-              <MaterialIcons name="add-circle" size={28} color="#00b09b" />
-            </TouchableOpacity>
-          </View>
+        <Animated.View style={headerStyle}>
+          <ScreenHeader
+            title="Transações"
+            subtitle={`${transactions.length} transaç${transactions.length !== 1 ? 'ões' : 'ão'} registrada${transactions.length !== 1 ? 's' : ''}`}
+            rightAction={{
+              icon: 'add',
+              onPress: () => setNewTransactionVisible(true),
+            }}
+            showCompanySelector={true}
+          />
         </Animated.View>
 
         {/* Search Bar */}

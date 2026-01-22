@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { PermissionsProvider } from '@/contexts/PermissionsContext';
+import { CompanyProvider } from '@/contexts/CompanyContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -58,10 +59,12 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <PermissionsProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <RootLayoutNav />
-            <StatusBar style="auto" />
-          </ThemeProvider>
+          <CompanyProvider>
+            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+              <RootLayoutNav />
+              <StatusBar style="auto" />
+            </ThemeProvider>
+          </CompanyProvider>
         </PermissionsProvider>
       </AuthProvider>
     </SafeAreaProvider>
