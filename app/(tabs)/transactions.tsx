@@ -14,6 +14,7 @@ import { buscarTransacoes, type TransactionWithAccount } from '@/lib/services/tr
 import { formatCurrency } from '@/lib/utils/currency';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
 import { useScreenAnimations } from '@/hooks/use-screen-animations';
+import { useNotification } from '@/hooks/use-notification';
 
 type FilterType = 'all' | 'income' | 'expense';
 type SortType = 'date-desc' | 'date-asc' | 'value-desc' | 'value-asc' | 'name-asc' | 'name-desc';
@@ -28,6 +29,7 @@ export default function TransactionsScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const { selectedCompany } = useCompany();
+  const { showError, showSuccess } = useNotification();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
   const { animatedStyle: headerStyle } = useScreenAnimations(0);
   const { animatedStyle: searchStyle } = useScreenAnimations(100);
@@ -58,6 +60,7 @@ export default function TransactionsScreen() {
         console.error('❌ Erro ao buscar transações:', error);
         setTransactions([]);
         setLoading(false);
+        showError('Não foi possível carregar as transações. Tente novamente.');
         return;
       }
       
@@ -70,6 +73,7 @@ export default function TransactionsScreen() {
     } catch (error) {
       console.error('❌ Erro ao carregar transações:', error);
       setTransactions([]);
+      showError('Erro ao carregar transações. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -107,9 +111,21 @@ export default function TransactionsScreen() {
     result.sort((a, b) => {
       switch (sortBy) {
         case 'date-desc':
-          return new Date(b.data).getTime() - new Date(a.data).getTime();
+          // Ordenar por data (decrescente), e se a data for igual, por created_at (decrescente)
+          const dateDiff = new Date(b.data).getTime() - new Date(a.data).getTime();
+          if (dateDiff !== 0) return dateDiff;
+          // Se as datas forem iguais, ordenar por created_at (mais recente primeiro)
+          const aCreatedAt = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const bCreatedAt = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return bCreatedAt - aCreatedAt;
         case 'date-asc':
-          return new Date(a.data).getTime() - new Date(b.data).getTime();
+          // Ordenar por data (crescente), e se a data for igual, por created_at (crescente)
+          const dateDiffAsc = new Date(a.data).getTime() - new Date(b.data).getTime();
+          if (dateDiffAsc !== 0) return dateDiffAsc;
+          // Se as datas forem iguais, ordenar por created_at (mais antiga primeiro)
+          const aCreatedAtAsc = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const bCreatedAtAsc = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return aCreatedAtAsc - bCreatedAtAsc;
         case 'value-desc':
           return b.valor - a.valor;
         case 'value-asc':
@@ -332,9 +348,11 @@ export default function TransactionsScreen() {
         onClose={() => {
           setNewTransactionVisible(false);
         }}
-        onSuccess={async () => {
+        onSuccess={async (transactionType) => {
           // Recarregar transações após criar
           await loadTransactions();
+          // Mostrar notificação de sucesso na página de transações com ícone do tipo
+          showSuccess('Transação criada com sucesso!', { transactionType });
         }}
       />
     </View>

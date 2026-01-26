@@ -34,7 +34,8 @@ export async function buscarTransacoes(userId: string) {
       )
     `)
     .eq('codigo_empresa', userId)
-    .order('data', { ascending: false });
+    .order('data', { ascending: false })
+    .order('created_at', { ascending: false });
 
   if (error) {
     console.error('Erro ao buscar transações:', error);
@@ -48,18 +49,31 @@ export async function buscarTransacoes(userId: string) {
  * Cria uma nova transação
  */
 export async function criarTransacao(transacao: Omit<Transaction, 'id' | 'created_at' | 'updated_at'>) {
-  const { data, error } = await supabase
-    .from('transacoes')
-    .insert([transacao])
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('transacoes')
+      .insert([transacao])
+      .select()
+      .single();
 
-  if (error) {
-    console.error('Erro ao criar transação:', error);
-    throw error;
+    if (error) {
+      console.error('Erro ao criar transação:', error);
+      // Criar um erro mais descritivo
+      const errorMessage = error.message || 'Erro desconhecido ao criar transação';
+      const customError = new Error(errorMessage);
+      (customError as any).originalError = error;
+      throw customError;
+    }
+
+    return data;
+  } catch (error: any) {
+    // Se já é um Error, apenas relançar
+    if (error instanceof Error) {
+      throw error;
+    }
+    // Caso contrário, criar um novo Error
+    throw new Error(error?.message || 'Erro ao criar transação');
   }
-
-  return data;
 }
 
 /**

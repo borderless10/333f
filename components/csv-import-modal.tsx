@@ -23,6 +23,8 @@ import { criarTransacao, type Transaction } from '@/lib/services/transactions';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils/currency';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from '@/components/NotificationToast';
 
 interface CSVImportModalProps {
   visible: boolean;
@@ -210,14 +212,14 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
               <Button
                 title="Baixar Template CSV"
                 onPress={handleDownloadTemplate}
-                variant="secondary"
+                variant="outline"
                 style={styles.button}
               />
               <Button
                 title="Selecionar Arquivo CSV"
                 onPress={handleSelectFile}
                 loading={loading}
-                style={styles.button}
+                style={[styles.button, styles.primaryButton]}
               />
             </View>
           </ScrollView>
@@ -295,14 +297,14 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
                 <Button
                   title="Voltar"
                   onPress={() => setStep('select')}
-                  variant="secondary"
+                  variant="outline"
                   style={styles.button}
                 />
                 {validationResult.validRows.length > 0 && (
                   <Button
                     title={`Importar ${validationResult.validRows.length} Transações`}
                     onPress={handleImport}
-                    style={styles.button}
+                    style={[styles.button, styles.primaryButton]}
                   />
                 )}
               </View>
@@ -323,6 +325,7 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
             </GlassContainer>
           </View>
         )}
+        <Toast config={toastConfig} topOffset={60} />
       </View>
     </Modal>
   );
@@ -376,6 +379,9 @@ const styles = StyleSheet.create({
   },
   button: {
     marginBottom: 12,
+  },
+  primaryButton: {
+    backgroundColor: '#00b09b',
   },
   previewCard: {
     padding: 20,

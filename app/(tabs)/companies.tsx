@@ -392,7 +392,7 @@ export default function CompaniesScreen() {
               <GlassContainer key={company.id} style={styles.companyCard}>
                 <View style={styles.companyHeader}>
                   <View style={styles.companyIcon}>
-                    <IconSymbol name="building.2" size={24} color="#00b09b" />
+                    <IconSymbol name="building.columns.fill" size={24} color="#00b09b" />
                   </View>
                   <View style={styles.companyInfo}>
                     <ThemedText type="defaultSemiBold" style={styles.companyName}>
@@ -423,19 +423,28 @@ export default function CompaniesScreen() {
                 </View>
                 <View style={styles.companyDetails}>
                   {company.cidade && company.estado && (
-                    <ThemedText style={styles.detailText}>
-                      📍 {company.cidade}/{company.estado}
-                    </ThemedText>
+                    <View style={styles.detailRow}>
+                      <IconSymbol name="location.fill" size={16} color="rgba(255, 255, 255, 0.7)" />
+                      <ThemedText style={styles.detailText}>
+                        {company.cidade}/{company.estado}
+                      </ThemedText>
+                    </View>
                   )}
                   {company.telefone && (
-                    <ThemedText style={styles.detailText}>
-                      📞 {formatarTelefone(company.telefone)}
-                    </ThemedText>
+                    <View style={styles.detailRow}>
+                      <IconSymbol name="phone.fill" size={16} color="rgba(255, 255, 255, 0.7)" />
+                      <ThemedText style={styles.detailText}>
+                        {formatarTelefone(company.telefone)}
+                      </ThemedText>
+                    </View>
                   )}
                   {company.email && (
-                    <ThemedText style={styles.detailText}>
-                      ✉️ {company.email}
-                    </ThemedText>
+                    <View style={styles.detailRow}>
+                      <IconSymbol name="envelope.fill" size={16} color="rgba(255, 255, 255, 0.7)" />
+                      <ThemedText style={styles.detailText}>
+                        {company.email}
+                      </ThemedText>
+                    </View>
                   )}
                 </View>
                 {(canEdit || canDelete) && (
@@ -861,11 +870,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    gap: 4,
+    gap: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   detailText: {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 13,
+    flex: 1,
   },
   actionsRow: {
     flexDirection: 'row',

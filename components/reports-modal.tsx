@@ -28,6 +28,8 @@ import { buscarContas, type ContaBancaria } from '@/lib/contas';
 import { formatCurrency } from '@/lib/utils/currency';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from '@/components/NotificationToast';
 
 interface ReportsModalProps {
   visible: boolean;
@@ -246,7 +248,7 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
                 </View>
 
                 <View style={styles.filterRow}>
-                  <ThemedText style={styles.filterLabel}>Conta Bancária (opcional):</ThemedText>
+                  <ThemedText style={styles.filterLabel}>Conta Bancária:</ThemedText>
                   <TouchableOpacity
                     style={styles.accountPicker}
                     onPress={() => {
@@ -269,14 +271,14 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
                       setReconciliationData(null);
                       setCashFlowData(null);
                     }}
-                    variant="secondary"
+                    variant="outline"
                     style={styles.button}
                   />
                   <Button
                     title="Gerar Relatório"
                     onPress={handleGenerateReport}
                     loading={loading}
-                    style={styles.button}
+                    style={[styles.button, styles.primaryButton]}
                   />
                 </View>
               </GlassContainer>
@@ -336,7 +338,7 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
                     <Button
                       title="Exportar CSV"
                       onPress={handleExportCSV}
-                      style={styles.exportButton}
+                      style={[styles.exportButton, styles.primaryButton]}
                     />
                   </GlassContainer>
                 </View>
@@ -383,7 +385,7 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
                     <Button
                       title="Exportar CSV"
                       onPress={handleExportCSV}
-                      style={styles.exportButton}
+                      style={[styles.exportButton, styles.primaryButton]}
                     />
                   </GlassContainer>
                 </View>
@@ -391,6 +393,7 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
             </View>
           )}
         </ScrollView>
+        <Toast config={toastConfig} topOffset={60} />
       </View>
     </Modal>
   );
@@ -509,6 +512,9 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
+  },
+  primaryButton: {
+    backgroundColor: '#00b09b',
   },
   loadingContainer: {
     alignItems: 'center',

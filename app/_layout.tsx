@@ -10,6 +10,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { PermissionsProvider } from '@/contexts/PermissionsContext';
 import { CompanyProvider } from '@/contexts/CompanyContext';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from '@/components/NotificationToast';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -67,6 +69,7 @@ export default function RootLayout() {
           </CompanyProvider>
         </PermissionsProvider>
       </AuthProvider>
+      <Toast config={toastConfig} topOffset={60} />
     </SafeAreaProvider>
   );
 }

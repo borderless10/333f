@@ -272,8 +272,7 @@ export default function AccountsScreen() {
         showsVerticalScrollIndicator={false}>
         <Animated.View style={headerStyle}>
           <ScreenHeader
-            title="Contas 
-            Bancárias"
+            title="Contas Bancárias"
             subtitle={`${contas.length} conta${contas.length !== 1 ? 's' : ''} conectada${contas.length !== 1 ? 's' : ''}`}
             rightAction={{
               icon: 'add',

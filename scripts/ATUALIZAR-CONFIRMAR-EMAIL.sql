@@ -1,8 +1,11 @@
 -- ===================================
--- FUNÇÃO RPC PARA CONFIRMAR EMAIL DE USUÁRIO
+-- ATUALIZAR FUNÇÃO CONFIRMAR EMAIL
 -- ===================================
--- Esta função permite que admins confirmem o email de usuários recém-criados
--- para que possam fazer login imediatamente
+-- Execute este script no SQL Editor do Supabase para corrigir o erro
+-- "column confirmed_at can only be updated to DEFAULT"
+--
+-- Este erro ocorre porque confirmed_at é uma coluna gerada automaticamente
+-- e não pode ser atualizada diretamente.
 
 CREATE OR REPLACE FUNCTION confirmar_email_usuario(p_user_id UUID)
 RETURNS BOOLEAN
@@ -37,8 +40,5 @@ BEGIN
 END;
 $$;
 
--- ===================================
--- GRANT PERMISSIONS
--- ===================================
 -- Garante que a função pode ser executada por usuários autenticados
 GRANT EXECUTE ON FUNCTION confirmar_email_usuario(UUID) TO authenticated;

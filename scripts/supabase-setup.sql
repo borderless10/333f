@@ -267,10 +267,10 @@ BEGIN
   END IF;
 
   -- Confirma o email do usuário
+  -- NOTA: confirmed_at é uma coluna gerada, não pode ser atualizada diretamente
+  -- Apenas atualizamos email_confirmed_at, e o confirmed_at será gerado automaticamente
   UPDATE auth.users
-  SET 
-    email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
-    confirmed_at = COALESCE(confirmed_at, NOW())
+  SET email_confirmed_at = COALESCE(email_confirmed_at, NOW())
   WHERE id = p_user_id;
 
   RETURN TRUE;

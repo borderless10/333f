@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { buscarPerfilUsuario, type UserRole } from '@/lib/services/profiles';
+import { getCreatingUserFlag } from '@/lib/utils/auth-flag';
 
 interface AuthContextData {
   user: User | null;
@@ -94,7 +95,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
 
     // Escuta mudanças na autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Ignora mudanças de sessão durante a criação de usuário
+      if (getCreatingUserFlag()) {
+        console.log('[AuthContext] Ignorando mudança de sessão durante criação de usuário:', event);
+        return;
+      }
+      
+      console.log('[AuthContext] Mudança de autenticação:', event, session?.user?.id);
       setUser(session?.user ?? null);
       setUserId(session?.user?.id ?? null);
       

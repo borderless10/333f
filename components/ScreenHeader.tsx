@@ -1,10 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, Animated, Text } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemedText } from './themed-text';
-import { CompanySelector } from './CompanySelector';
-import { IconSymbol } from './ui/icon-symbol';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CompanySelector } from './CompanySelector';
 
 interface ScreenHeaderProps {
   title: string;
@@ -108,7 +106,7 @@ export function ScreenHeader({
               style={styles.actionButton}
               onPress={rightAction.onPress}
               activeOpacity={0.7}>
-              <MaterialIcons name={rightAction.icon as any} size={24} color="#00b09b" />
+              <MaterialIcons name={rightAction.icon as any} size={28} color="#00b09b" />
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -135,9 +133,12 @@ const styles = StyleSheet.create({
     minWidth: 0, // Permite que o texto seja truncado se necessário
     flexShrink: 1, // Permite encolher se necessário
     marginRight: 8,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
   },
   titleContainer: {
     width: '100%',
+    alignItems: 'flex-start',
   },
   title: {
     fontSize: 24,
@@ -150,9 +151,12 @@ const styles = StyleSheet.create({
     textShadowRadius: 8,
     lineHeight: 30,
     flexShrink: 1,
+    textAlign: 'left',
+    alignSelf: 'flex-start',
   },
   subtitleContainer: {
     width: '100%',
+    alignItems: 'flex-start',
   },
   subtitle: {
     fontSize: 13,
@@ -161,6 +165,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
     lineHeight: 16,
     flexShrink: 1,
+    textAlign: 'left',
+    alignSelf: 'flex-start',
   },
   headerActions: {
     flexDirection: 'row',
@@ -169,18 +175,9 @@ const styles = StyleSheet.create({
     flexShrink: 0, // Não permite que os botões encolham
   },
   actionButton: {
-    padding: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 176, 155, 0.15)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 176, 155, 0.4)',
-    shadowColor: '#00b09b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-    minWidth: 40,
-    minHeight: 40,
+    padding: 10,
+    minWidth: 44,
+    minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },

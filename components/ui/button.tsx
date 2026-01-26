@@ -41,7 +41,10 @@ export function Button({ title, variant = 'primary', loading, style, disabled, .
       {loading ? (
         <ActivityIndicator color={getTextColor()} />
       ) : (
-        <ThemedText style={[styles.text, { color: getTextColor() }]} type="defaultSemiBold">
+        <ThemedText 
+          style={[styles.text, { color: getTextColor() }]} 
+          type="defaultSemiBold"
+          numberOfLines={0}>
           {title}
         </ThemedText>
       )}
@@ -60,6 +63,8 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 16,
+    textAlign: 'center',
+    width: '100%',
   },
   disabled: {
     opacity: 0.5,

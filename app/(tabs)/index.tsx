@@ -6,11 +6,15 @@ import { ReportsModal } from '@/components/reports-modal';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
+import { useNotification } from '@/hooks/use-notification';
+import { buscarTransacoes, type TransactionWithAccount } from '@/lib/services/transactions';
+import { formatCurrency } from '@/lib/utils/currency';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
-import React from 'react';
-import { Animated, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { ActivityIndicator, Animated, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
@@ -18,8 +22,12 @@ export default function DashboardScreen() {
   const [csvImportVisible, setCsvImportVisible] = React.useState(false);
   const [reportsVisible, setReportsVisible] = React.useState(false);
   const [newTransactionVisible, setNewTransactionVisible] = React.useState(false);
+  const [transactions, setTransactions] = React.useState<TransactionWithAccount[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const insets = useSafeAreaInsets();
+  const { userId } = useAuth();
   const { selectedCompany } = useCompany();
+  const { showSuccess, showError } = useNotification();
 
   // Animações
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -78,10 +86,44 @@ export default function DashboardScreen() {
     ]).start();
   }, []);
 
+  // Carregar transações do Supabase
+  const loadTransactions = React.useCallback(async () => {
+    if (!userId) {
+      setLoading(false);
+      setTransactions([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data, error } = await buscarTransacoes(userId);
+      
+      if (error) {
+        console.error('Erro ao carregar transações:', error);
+        showError('Não foi possível carregar os dados financeiros.');
+        setTransactions([]);
+        return;
+      }
+      
+      setTransactions(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar transações:', error);
+      showError('Erro ao carregar dados financeiros.');
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [userId, showError]);
+
+  useEffect(() => {
+    loadTransactions();
+  }, [loadTransactions]);
+
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+    loadTransactions();
+  }, [loadTransactions]);
 
   // Animações de press para botões
   const scaleAnim1 = React.useRef(new Animated.Value(1)).current;
@@ -144,34 +186,93 @@ export default function DashboardScreen() {
     }).start();
   };
 
-  // Dados mockados - serão substituídos pela API
-  const financialData = {
-    balance: 'R$ 245.890,50',
-    income: 'R$ 180.500,00',
-    expense: 'R$ 134.609,50',
-  };
+  // Calcular dados financeiros a partir das transações reais
+  const financialData = useMemo(() => {
+    const income = transactions
+      .filter((t: TransactionWithAccount) => t.tipo === 'receita')
+      .reduce((sum: number, t: TransactionWithAccount) => sum + Number(t.valor), 0);
+    
+    const expense = transactions
+      .filter((t: TransactionWithAccount) => t.tipo === 'despesa')
+      .reduce((sum: number, t: TransactionWithAccount) => sum + Number(t.valor), 0);
+    
+    const balance = income - expense;
+    
+    return {
+      balance: formatCurrency(balance),
+      income: formatCurrency(income),
+      expense: formatCurrency(expense),
+    };
+  }, [transactions]);
 
-  const recentTransactions = [
-    { id: '1', description: 'Pagamento de fornecedor', amount: '-R$ 5.000,00', date: 'Hoje', type: 'expense' },
-    { id: '2', description: 'Recebimento cliente ABC', amount: '+R$ 12.500,00', date: 'Ontem', type: 'income' },
-    { id: '3', description: 'Salário funcionários', amount: '-R$ 45.000,00', date: '15/01', type: 'expense' },
-    { id: '4', description: 'Venda produto XYZ', amount: '+R$ 8.300,00', date: '14/01', type: 'income' },
-  ];
+  // Animações para cada item de transação (fixo: 4 refs)
+  const transactionAnim1 = React.useRef(new Animated.Value(0)).current;
+  const transactionAnim2 = React.useRef(new Animated.Value(0)).current;
+  const transactionAnim3 = React.useRef(new Animated.Value(0)).current;
+  const transactionAnim4 = React.useRef(new Animated.Value(0)).current;
+  const transactionAnims = [transactionAnim1, transactionAnim2, transactionAnim3, transactionAnim4];
 
-  // Animações para cada item de transação
-  const transactionAnims = recentTransactions.map(() => React.useRef(new Animated.Value(0)).current);
+  // Transações recentes (últimas 4)
+  const recentTransactions = useMemo(() => {
+    return transactions
+      .slice(0, 4)
+      .map((transaction: TransactionWithAccount) => {
+        const tipo = transaction.tipo === 'receita' ? 'income' : 'expense';
+        const amount = tipo === 'income' 
+          ? `+${formatCurrency(transaction.valor)}`
+          : `-${formatCurrency(transaction.valor)}`;
+        
+        // Formatar data
+        const date = new Date(transaction.data + 'T00:00:00');
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        let dateStr = '';
+        if (date.toDateString() === today.toDateString()) {
+          dateStr = 'Hoje';
+        } else if (date.toDateString() === yesterday.toDateString()) {
+          dateStr = 'Ontem';
+        } else {
+          dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        }
+        
+        return {
+          id: transaction.id?.toString() || '',
+          description: transaction.descricao,
+          amount,
+          date: dateStr,
+          type: tipo,
+        };
+      });
+  }, [transactions]);
 
   React.useEffect(() => {
     // Animar cada item de transação com delay escalonado
-    transactionAnims.forEach((anim, index) => {
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 400,
-        delay: 450 + (index * 50),
-        useNativeDriver: true,
-      }).start();
+    transactionAnims.forEach((anim: Animated.Value, index: number) => {
+      if (index < recentTransactions.length) {
+        anim.setValue(0);
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 400,
+          delay: 450 + (index * 50),
+          useNativeDriver: true,
+        }).start();
+      }
     });
-  }, []);
+  }, [recentTransactions.length]);
+
+  if (loading && transactions.length === 0) {
+    return (
+      <View style={styles.container}>
+        <AnimatedBackground />
+        <View style={[styles.loadingContainer, { paddingTop: insets.top + 16 }]}>
+          <ActivityIndicator size="large" color="#00b09b" />
+          <ThemedText style={styles.loadingText}>Carregando dados...</ThemedText>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -350,7 +451,17 @@ export default function DashboardScreen() {
           </View>
 
           <GlassContainer style={styles.transactionsCard}>
-            {recentTransactions.map((transaction, index) => (
+            {recentTransactions.length === 0 ? (
+              <View style={styles.emptyTransactions}>
+                <ThemedText style={styles.emptyTransactionsText}>
+                  Nenhuma transação recente
+                </ThemedText>
+                <ThemedText style={styles.emptyTransactionsSubtext}>
+                  Crie uma nova transação para começar
+                </ThemedText>
+              </View>
+            ) : (
+              recentTransactions.map((transaction: any, index: number) => (
               <Animated.View
                 key={transaction.id}
                 style={{
@@ -411,7 +522,8 @@ export default function DashboardScreen() {
                 </Text>
               </TouchableOpacity>
               </Animated.View>
-            ))}
+              ))
+            )}
           </GlassContainer>
         </Animated.View>
 
@@ -523,7 +635,7 @@ export default function DashboardScreen() {
         onClose={() => setCsvImportVisible(false)}
         onSuccess={() => {
           // Recarregar dados após importação bem-sucedida
-          onRefresh();
+          loadTransactions();
         }}
       />
       <ReportsModal
@@ -533,9 +645,11 @@ export default function DashboardScreen() {
       <NewTransactionModal
         visible={newTransactionVisible}
         onClose={() => setNewTransactionVisible(false)}
-        onSuccess={() => {
+        onSuccess={(transactionType) => {
           // Recarregar dados após criar transação
           onRefresh();
+          // Mostrar notificação de sucesso na página com ícone do tipo
+          showSuccess('Transação criada com sucesso!', { transactionType });
         }}
         returnToHome={true}
       />
@@ -728,6 +842,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  quickActionsContainer: {
+    gap: 12,
+  },
   quickActions: {
     flexDirection: 'row',
     gap: 12,
@@ -754,5 +871,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  loadingText: {
+    marginTop: 16,
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  emptyTransactions: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  emptyTransactionsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  emptyTransactionsSubtext: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
   },
 });

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
+import { setCreatingUserFlag } from '@/lib/utils/auth-flag';
 
 export type UserRole = 'admin' | 'analista' | 'viewer';
 
@@ -167,6 +168,8 @@ export async function deletarUsuarioPermanentemente(userId: string) {
 
 /**
  * Confirma o email de um usuário (apenas para admins)
+ * Retorna true se confirmado com sucesso, false caso contrário
+ * Não lança erro, apenas retorna false para não interromper o fluxo
  */
 async function confirmarEmailUsuario(userId: string): Promise<boolean> {
   try {
@@ -175,15 +178,16 @@ async function confirmarEmailUsuario(userId: string): Promise<boolean> {
     });
 
     if (error) {
-      console.error('Erro ao confirmar email via RPC:', error);
-      // Tenta confirmar diretamente via SQL se a RPC falhar
-      // Isso pode não funcionar dependendo das permissões, mas tentamos
+      // Loga o erro mas não interrompe o fluxo
+      // O email pode ser confirmado depois ou o usuário pode fazer login se a confirmação estiver desabilitada
+      console.warn('[confirmarEmailUsuario] Não foi possível confirmar email automaticamente:', error.message);
       return false;
     }
 
     return data === true;
-  } catch (err) {
-    console.error('Erro ao confirmar email:', err);
+  } catch (err: any) {
+    // Loga o erro mas não interrompe o fluxo
+    console.warn('[confirmarEmailUsuario] Erro ao confirmar email:', err?.message || err);
     return false;
   }
 }
@@ -206,12 +210,17 @@ export async function criarNovoUsuario(
   }
   
   console.log(`[criarNovoUsuario] Iniciando criação de usuário com role: ${role}`);
+  
+  // Define flag para ignorar mudanças de sessão durante a criação
+  setCreatingUserFlag(true);
+  
   // Salva a sessão atual do admin antes de criar o novo usuário
   const { data: currentSession } = await supabase.auth.getSession();
   const adminSession = currentSession?.session;
   const adminUserId = adminSession?.user?.id;
 
   if (!adminSession) {
+    setCreatingUserFlag(false);
     throw new Error('Você precisa estar logado como admin para criar usuários');
   }
 
@@ -249,6 +258,8 @@ export async function criarNovoUsuario(
             console.error('[criarNovoUsuario] Erro ao atualizar role:', updateError);
           }
         }
+        // Remove a flag após sucesso com RPC
+        setCreatingUserFlag(false);
         return { data: rpcData, error: null };
       } else {
         // Se a RPC não criou o perfil, cria manualmente
@@ -256,6 +267,21 @@ export async function criarNovoUsuario(
         try {
           const perfil = await criarPerfil(userIdFromRpc, role);
           console.log('[criarNovoUsuario] Perfil criado manualmente com sucesso:', perfil);
+          
+          // Garante que a sessão do admin está ativa
+          if (adminSession) {
+            const { data: finalCheck } = await supabase.auth.getSession();
+            if (finalCheck?.session?.user?.id !== adminUserId) {
+              await supabase.auth.setSession({
+                access_token: adminSession.access_token,
+                refresh_token: adminSession.refresh_token,
+              });
+            }
+          }
+          
+          // Remove a flag após sucesso
+          setCreatingUserFlag(false);
+          
           return { 
             data: { 
               ...rpcData, 
@@ -265,6 +291,7 @@ export async function criarNovoUsuario(
             error: null 
           };
         } catch (perfilError: any) {
+          setCreatingUserFlag(false);
           console.error('[criarNovoUsuario] Erro ao criar perfil após RPC:', perfilError);
           throw new Error('Usuário criado pela RPC, mas não foi possível criar o perfil: ' + perfilError.message);
         }
@@ -409,6 +436,23 @@ export async function criarNovoUsuario(
       }
     }
     
+    // Garante que a sessão do admin está ativa antes de retornar
+    if (adminSession) {
+      const { data: finalCheck } = await supabase.auth.getSession();
+      if (finalCheck?.session?.user?.id !== adminUserId) {
+        console.warn('[criarNovoUsuario] Sessão mudou, restaurando admin...');
+        await supabase.auth.setSession({
+          access_token: adminSession.access_token,
+          refresh_token: adminSession.refresh_token,
+        });
+        // Aguarda um pouco para garantir que a sessão foi restaurada
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+    
+    // Remove a flag após tudo estar completo
+    setCreatingUserFlag(false);
+    
     // Retorna sucesso mesmo se o email não foi confirmado
     // O email pode ser confirmado depois ou o usuário pode fazer login se a confirmação estiver desabilitada
     return { 
@@ -420,11 +464,15 @@ export async function criarNovoUsuario(
       error: null 
     };
   } catch (error) {
+    // Remove a flag em caso de erro
+    setCreatingUserFlag(false);
+    
     // Garante que a sessão do admin seja restaurada mesmo em caso de erro
     if (adminSession) {
       try {
         const { data: verifySession } = await supabase.auth.getSession();
         if (verifySession?.session?.user?.id !== adminUserId) {
+          console.warn('[criarNovoUsuario] Restaurando sessão do admin após erro...');
           await supabase.auth.setSession({
             access_token: adminSession.access_token,
             refresh_token: adminSession.refresh_token,

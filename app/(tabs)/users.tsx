@@ -253,60 +253,25 @@ export default function UsersScreen() {
       closeNewUserModal();
       
       // Garante que o loading seja desligado imediatamente
-      setLoading(false);
       setCreatingUser(false);
 
-      // Verifica se o email foi confirmado
-      const emailConfirmado = resultado?.data?.emailConfirmado;
+      // Recarrega a lista de usuários
+      await loadUsers();
       
-      console.log('[UsersScreen] Email confirmado:', emailConfirmado);
-      
-      // Aguarda um pouco para garantir que o modal foi fechado antes de mostrar o Alert
+      // Mostra mensagem de sucesso simples e bonita
       setTimeout(() => {
-        if (emailConfirmado === false) {
-          // Email não foi confirmado automaticamente, mas usuário foi criado
-          Alert.alert(
-            'Usuário Criado com Sucesso!',
-            'Usuário criado com sucesso!\n\n' +
-            '⚠️ O email não foi confirmado automaticamente.\n\n' +
-            'SOLUÇÃO RÁPIDA:\n' +
-            '1. Acesse Supabase Dashboard\n' +
-            '2. Authentication → Providers → Email\n' +
-            '3. Desabilite "Confirm email"\n\n' +
-            'OU execute este SQL:\n' +
-            `UPDATE auth.users SET email_confirmed_at = NOW() WHERE email = '${newUserEmail.trim()}';`,
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  console.log('[UsersScreen] Navegando para página inicial...');
-                  router.replace('/(tabs)');
-                }
-              }
-            ]
-          );
-        } else {
-          // Tudo certo, email confirmado
-          Alert.alert(
-            'Usuário Criado com Sucesso!',
-            'Usuário criado com sucesso! O usuário já pode fazer login.',
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  console.log('[UsersScreen] Navegando para página inicial...');
-                  router.replace('/(tabs)');
-                }
-              }
-            ]
-          );
-        }
-      }, 300);
+        Alert.alert(
+          '✅ Sucesso!',
+          `Usuário ${newUserEmail.trim()} criado com sucesso!`
+        );
+      }, 200);
     } catch (error: any) {
       console.error('Erro ao criar usuário:', error);
       // Garante que o loading seja desligado mesmo em caso de erro
-      setLoading(false);
       setCreatingUser(false);
+      
+      // Recarrega a lista para garantir que está atualizada
+      await loadUsers();
       
       // Mostra erro após um pequeno delay para garantir que o estado foi atualizado
       setTimeout(() => {
@@ -347,8 +312,7 @@ export default function UsersScreen() {
             contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
             showsVerticalScrollIndicator={false}>
             <ScreenHeader
-              title="Gerenciar
-              Usuários"
+              title="Gerenciar Usuários"
               subtitle={`${users.length} usuário${users.length !== 1 ? 's' : ''} cadastrado${users.length !== 1 ? 's' : ''}`}
               rightAction={{
                 icon: 'add',

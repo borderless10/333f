@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Alert,
   Modal,
   Platform,
   ScrollView,
@@ -24,17 +23,21 @@ import { CurrencyInput } from './currency-input';
 import { criarTransacao, type Transaction } from '@/lib/services/transactions';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotification } from '@/hooks/use-notification';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from '@/components/NotificationToast';
 
 interface NewTransactionModalProps {
   visible: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (transactionType?: 'receita' | 'despesa') => void;
   returnToHome?: boolean;
 }
 
 export function NewTransactionModal({ visible, onClose, onSuccess, returnToHome = false }: NewTransactionModalProps) {
   const { userId } = useAuth();
   const insets = useSafeAreaInsets();
+  const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -54,8 +57,17 @@ export function NewTransactionModal({ visible, onClose, onSuccess, returnToHome 
       resetForm();
       // Garantir que valor seja inicializado
       setValor('0');
+      // Garantir que loading esteja false ao abrir
+      setLoading(false);
     }
   }, [visible, userId]);
+
+  // Cleanup: garantir que loading seja resetado quando o modal fechar
+  useEffect(() => {
+    if (!visible) {
+      setLoading(false);
+    }
+  }, [visible]);
 
   const loadAccounts = async () => {
     try {
@@ -91,28 +103,23 @@ export function NewTransactionModal({ visible, onClose, onSuccess, returnToHome 
   const handleSave = async () => {
     // Validações
     if (!descricao.trim()) {
-      Alert.alert('Erro', 'Por favor, preencha a descrição.');
+      showError('Por favor, preencha a descrição.');
       return;
     }
 
     if (!valor || valor === '0' || valor.trim() === '') {
-      Alert.alert('Erro', 'Por favor, preencha o valor.');
+      showError('Por favor, preencha o valor.');
       return;
     }
 
     const valorNum = parseFloat(valor);
     if (isNaN(valorNum) || valorNum <= 0) {
-      Alert.alert('Erro', 'Por favor, insira um valor válido maior que zero.');
-      return;
-    }
-
-    if (!categoria.trim()) {
-      Alert.alert('Erro', 'Por favor, preencha a categoria.');
+      showError('Por favor, insira um valor válido maior que zero.');
       return;
     }
 
     if (!userId) {
-      Alert.alert('Erro', 'Usuário não identificado.');
+      showError('Usuário não identificado.');
       return;
     }
 
@@ -125,44 +132,74 @@ export function NewTransactionModal({ visible, onClose, onSuccess, returnToHome 
         valor: valorNum,
         data: formatDate(selectedDate),
         tipo,
-        categoria: categoria.trim(),
+        categoria: categoria.trim() || '',
         conta_bancaria_id: contaBancariaId,
       };
 
-      await criarTransacao(transacao);
+      // Timeout de segurança (30 segundos)
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Tempo de espera excedido. Verifique sua conexão.')), 30000);
+      });
+
+      await Promise.race([criarTransacao(transacao), timeoutPromise]);
       
-      // Chamar onSuccess ANTES de fechar para garantir atualização
-      if (onSuccess) {
-        // Aguardar um pouco para garantir que a transação foi salva
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await onSuccess();
-      }
+      // Resetar loading IMEDIATAMENTE após sucesso
+      setLoading(false);
+      
+      // Guardar referência ao onSuccess e tipo antes de fechar
+      const successCallback = onSuccess;
+      const transactionType = tipo; // Guardar o tipo da transação criada
       
       // Fechar modal
       handleClose();
       
-      // Mostrar alert após fechar
-      setTimeout(() => {
-        Alert.alert('Sucesso', 'Transação criada com sucesso!', [
-          {
-            text: 'OK',
-            onPress: () => {
-              if (returnToHome) {
-                router.push('/(tabs)/');
-              }
-            },
-          },
-        ]);
-      }, 200);
+      // Chamar onSuccess de forma não-bloqueante (não esperar por ele)
+      if (successCallback) {
+        // Executar em background, sem bloquear - não esperamos por ele
+        setTimeout(() => {
+          try {
+            successCallback(transactionType); // Passar o tipo da transação
+          } catch (err) {
+            console.error('Erro ao chamar onSuccess:', err);
+          }
+        }, 100);
+      }
+      
+      // Navegar para home se necessário
+      if (returnToHome) {
+        setTimeout(() => {
+          router.replace('/' as any);
+        }, 1000);
+      }
     } catch (error: any) {
       console.error('Erro ao criar transação:', error);
-      Alert.alert('Erro', error.message || 'Não foi possível criar a transação. Tente novamente.');
-    } finally {
+      console.error('Detalhes do erro:', JSON.stringify(error, null, 2));
+      
+      // Resetar loading imediatamente em caso de erro
       setLoading(false);
+      
+      // NÃO fechar o modal em caso de erro
+      // Mostrar notificação de erro
+      let errorMessage = 'Não foi possível criar a transação. Tente novamente.';
+      
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.error?.message) {
+        errorMessage = error.error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // Garantir que a notificação apareça (com delay para garantir renderização)
+      setTimeout(() => {
+        showError(errorMessage);
+      }, 200);
     }
   };
 
   const handleClose = () => {
+    // Resetar loading antes de fechar (segurança extra)
+    setLoading(false);
     resetForm();
     onClose();
   };
@@ -283,7 +320,7 @@ export function NewTransactionModal({ visible, onClose, onSuccess, returnToHome 
 
             {/* Categoria */}
             <View style={styles.section}>
-              <ThemedText style={styles.label}>Categoria *</ThemedText>
+              <ThemedText style={styles.label}>Categoria</ThemedText>
               <TextInput
                 style={styles.input}
                 placeholder="Ex: Fornecedores, Vendas, Salários..."
@@ -339,20 +376,22 @@ export function NewTransactionModal({ visible, onClose, onSuccess, returnToHome 
             {/* Botões */}
             <View style={styles.actions}>
               <Button
-                title="Cancelar"
-                onPress={handleClose}
-                variant="secondary"
-                style={styles.button}
-              />
-              <Button
                 title="Salvar Transação"
                 onPress={handleSave}
                 loading={loading}
-                style={styles.button}
+                style={styles.saveButton}
+              />
+              <Button
+                title="Cancelar"
+                onPress={handleClose}
+                variant="outline"
+                disabled={loading}
+                style={styles.cancelButton}
               />
             </View>
           </GlassContainer>
         </ScrollView>
+        <Toast config={toastConfig} topOffset={60} />
       </View>
     </Modal>
   );
@@ -474,11 +513,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   actions: {
-    flexDirection: 'row',
+    marginTop: 24,
     gap: 12,
-    marginTop: 8,
   },
-  button: {
-    flex: 1,
+  saveButton: {
+    backgroundColor: '#00b09b',
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
 });
