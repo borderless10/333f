@@ -7,6 +7,8 @@ export interface NotificationOptions {
   duration?: number;
   onPress?: () => void;
   transactionType?: 'receita' | 'despesa';
+  iconType?: 'company' | 'account' | 'user' | 'title';
+  userRole?: 'admin' | 'analista' | 'viewer';
 }
 
 /**
@@ -28,6 +30,8 @@ export function useNotification() {
       onPress: options?.onPress,
       props: {
         transactionType: options?.transactionType, // Passar tipo de transação através de props
+        iconType: options?.iconType, // Passar tipo de ícone através de props
+        userRole: options?.userRole, // Passar cargo do usuário através de props
       },
     } as any);
   }, []);

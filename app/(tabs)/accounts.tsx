@@ -1,21 +1,25 @@
 import { AnimatedBackground } from '@/components/animated-background';
 import { GlassContainer } from '@/components/glass-container';
+import { toastConfig } from '@/components/NotificationToast';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
+import { useNotification } from '@/hooks/use-notification';
 import { useScreenAnimations } from '@/hooks/use-screen-animations';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
 import { atualizarConta, buscarContas, criarConta, deletarConta, type ContaBancaria } from '@/lib/contas';
 import React, { useEffect, useState } from 'react';
 import { Alert, Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 
 export default function AccountsScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +34,7 @@ export default function AccountsScreen() {
   const [codigoAgencia, setCodigoAgencia] = useState('');
   const [descricao, setDescricao] = useState('');
   const [numeroConta, setNumeroConta] = useState('');
+  const [modalError, setModalError] = useState('');
 
   const { selectedCompany } = useCompany();
 
@@ -65,7 +70,7 @@ export default function AccountsScreen() {
     } catch (error) {
       console.error('❌ Erro ao carregar contas:', error);
       setContas([]);
-      Alert.alert('Erro', 'Não foi possível carregar as contas.');
+      showError('Não foi possível carregar as contas.');
     } finally {
       setLoading(false); // ✅ CORRIGIDO
     }
@@ -94,6 +99,12 @@ export default function AccountsScreen() {
   const fecharModal = () => {
     setModalVisible(false);
     setEditingConta(null);
+    setCodigoContaBanco('');
+    setCodigoBanco('');
+    setCodigoAgencia('');
+    setDescricao('');
+    setNumeroConta('');
+    setModalError('');
   };
 
   // Função auxiliar para validar se é número
@@ -111,62 +122,67 @@ export default function AccountsScreen() {
   };
 
   const validarFormulario = (): boolean => {
+    setModalError(''); // Limpar erro anterior
+    
     // Validação: campos obrigatórios
-    if (!codigoContaBanco || !codigoBanco || !codigoAgencia || !descricao || !numeroConta) {
-      Alert.alert('Campos obrigatórios', 'Por favor, preencha todos os campos antes de salvar.');
+    if (!codigoContaBanco.trim() || !codigoBanco.trim() || !codigoAgencia.trim() || !descricao.trim() || !numeroConta.trim()) {
+      setModalError('Por favor, preencha todos os campos antes de salvar.');
       return false;
     }
 
     // Validação: Código Conta Banco (deve ser número positivo)
     const validacaoCodigoContaBanco = validarNumero(codigoContaBanco, 'Código Conta Banco');
     if (!validacaoCodigoContaBanco.valido) {
-      Alert.alert('Validação', validacaoCodigoContaBanco.mensagem || 'Código Conta Banco inválido.');
+      const errorMsg = validacaoCodigoContaBanco.mensagem || 'Código Conta Banco inválido.';
+      setModalError(errorMsg);
       return false;
     }
 
     // Validação: Código Banco (deve ser número positivo, geralmente 3 dígitos)
     const validacaoCodigoBanco = validarNumero(codigoBanco, 'Código Banco');
     if (!validacaoCodigoBanco.valido) {
-      Alert.alert('Validação', validacaoCodigoBanco.mensagem || 'Código Banco inválido.');
+      const errorMsg = validacaoCodigoBanco.mensagem || 'Código Banco inválido.';
+      setModalError(errorMsg);
       return false;
     }
     const codigoBancoNum = parseInt(codigoBanco.trim());
     if (codigoBancoNum < 1 || codigoBancoNum > 999) {
-      Alert.alert('Validação', 'O código do banco deve estar entre 1 e 999 (ex: 001 para BB, 341 para Itaú).');
+      setModalError('O código do banco deve estar entre 1 e 999 (ex: 001 para BB, 341 para Itaú).');
       return false;
     }
 
     // Validação: Código Agência (deve ser número positivo)
     const validacaoCodigoAgencia = validarNumero(codigoAgencia, 'Código Agência');
     if (!validacaoCodigoAgencia.valido) {
-      Alert.alert('Validação', validacaoCodigoAgencia.mensagem || 'Código Agência inválido.');
+      const errorMsg = validacaoCodigoAgencia.mensagem || 'Código Agência inválido.';
+      setModalError(errorMsg);
       return false;
     }
     const codigoAgenciaNum = parseInt(codigoAgencia.trim());
     if (codigoAgenciaNum < 1 || codigoAgenciaNum > 99999) {
-      Alert.alert('Validação', 'O código da agência deve estar entre 1 e 99999.');
+      setModalError('O código da agência deve estar entre 1 e 99999.');
       return false;
     }
 
-    // Validação: Descrição (mínimo 3 caracteres, máximo 40)
+    // Validação: Descrição (mínimo 1 caractere, máximo 40)
     const descricaoTrim = descricao.trim();
-    if (descricaoTrim.length < 3) {
-      Alert.alert('Validação', 'A descrição deve ter pelo menos 3 caracteres.');
+    if (descricaoTrim.length < 1) {
+      setModalError('A descrição é obrigatória.');
       return false;
     }
     if (descricaoTrim.length > 40) {
-      Alert.alert('Validação', 'A descrição deve ter no máximo 40 caracteres.');
+      setModalError('A descrição deve ter no máximo 40 caracteres.');
       return false;
     }
 
     // Validação: Número da Conta (mínimo 1 caractere, máximo 20)
     const numeroContaTrim = numeroConta.trim();
     if (numeroContaTrim.length < 1) {
-      Alert.alert('Validação', 'O número da conta é obrigatório.');
+      setModalError('O número da conta é obrigatório.');
       return false;
     }
     if (numeroContaTrim.length > 20) {
-      Alert.alert('Validação', 'O número da conta deve ter no máximo 20 caracteres.');
+      setModalError('O número da conta deve ter no máximo 20 caracteres.');
       return false;
     }
 
@@ -188,14 +204,15 @@ export default function AccountsScreen() {
 
       if (editingConta) {
         await atualizarConta(editingConta.id!, dadosConta);
-        Alert.alert('Sucesso', 'Conta atualizada com sucesso!');
+        fecharModal();
+        await carregarContas(userId);
+        showSuccess('Conta atualizada com sucesso!', { iconType: 'account' });
       } else {
         await criarConta(dadosConta);
-        Alert.alert('Sucesso', 'Conta criada com sucesso!');
+        fecharModal();
+        await carregarContas(userId);
+        showSuccess('Conta criada com sucesso!', { iconType: 'account' });
       }
-
-      fecharModal();
-      await carregarContas(userId);
     } catch (error: any) {
       console.error('Erro ao salvar conta:', error);
       
@@ -214,7 +231,9 @@ export default function AccountsScreen() {
         }
       }
       
-      Alert.alert('Erro ao salvar', mensagemErro);
+      // Mostrar erro dentro do modal (visual e toast)
+      setModalError(mensagemErro);
+      showError(mensagemErro);
     }
   };
 
@@ -230,11 +249,11 @@ export default function AccountsScreen() {
           onPress: async () => {
             try {
               await deletarConta(conta.id!);
-              Alert.alert('Sucesso', 'Conta excluída com sucesso!');
+              showSuccess('Conta excluída com sucesso!', { iconType: 'account' });
               if (userId) await carregarContas(userId);
             } catch (error: any) {
               console.error('Erro ao deletar conta:', error);
-              Alert.alert('Erro', error.message || 'Não foi possível excluir a conta.');
+              showError(error.message || 'Não foi possível excluir a conta.');
             }
           },
         },
@@ -389,6 +408,7 @@ export default function AccountsScreen() {
                       // Permite apenas números
                       const numeros = text.replace(/[^0-9]/g, '');
                       setCodigoContaBanco(numeros);
+                      setModalError(''); // Limpar erro ao editar
                     }}
                     placeholder="Ex: 1"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
@@ -405,6 +425,7 @@ export default function AccountsScreen() {
                       // Permite apenas números
                       const numeros = text.replace(/[^0-9]/g, '');
                       setCodigoBanco(numeros);
+                      setModalError(''); // Limpar erro ao editar
                     }}
                     placeholder="Ex: 001 (BB), 341 (Itaú), 237 (Bradesco)"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
@@ -422,6 +443,7 @@ export default function AccountsScreen() {
                       // Permite apenas números
                       const numeros = text.replace(/[^0-9]/g, '');
                       setCodigoAgencia(numeros);
+                      setModalError(''); // Limpar erro ao editar
                     }}
                     placeholder="Ex: 1234"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
@@ -437,7 +459,10 @@ export default function AccountsScreen() {
                   </ThemedText>
                   <TextInput
                     value={descricao}
-                    onChangeText={setDescricao}
+                    onChangeText={(text) => {
+                      setDescricao(text);
+                      setModalError(''); // Limpar erro ao editar
+                    }}
                     placeholder="Ex: Conta Corrente Principal"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     maxLength={40}
@@ -451,13 +476,23 @@ export default function AccountsScreen() {
                   </ThemedText>
                   <TextInput
                     value={numeroConta}
-                    onChangeText={setNumeroConta}
+                    onChangeText={(text) => {
+                      setNumeroConta(text);
+                      setModalError(''); // Limpar erro ao editar
+                    }}
                     placeholder="Ex: 12345-6"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     maxLength={20}
                     style={styles.input}
                   />
                 </View>
+
+                {/* Error Message */}
+                {modalError !== '' && (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{modalError}</Text>
+                  </View>
+                )}
 
                 <View style={styles.modalActions}>
                   <Button
@@ -474,9 +509,11 @@ export default function AccountsScreen() {
                 </View>
               </View>
             </ScrollView>
+            <Toast config={toastConfig} topOffset={60} />
           </View>
         </View>
       </Modal>
+      <Toast config={toastConfig} topOffset={60} />
     </View>
   );
 }
@@ -633,6 +670,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
     color: '#FFFFFF',
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.5)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',

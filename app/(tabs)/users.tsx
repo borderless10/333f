@@ -8,6 +8,9 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
+import { useNotification } from '@/hooks/use-notification';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from '@/components/NotificationToast';
 import {
   atualizarPerfil,
   buscarUsuariosComPerfis,
@@ -41,6 +44,7 @@ export default function UsersScreen() {
   const insets = useSafeAreaInsets();
   const { userId, refreshUserRole } = useAuth();
   const { isAdmin } = usePermissions();
+  const { showSuccess, showError, showWarning } = useNotification();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
 
   const [users, setUsers] = useState<UserWithProfile[]>([]);
@@ -58,6 +62,7 @@ export default function UsersScreen() {
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('viewer');
   const [creatingUser, setCreatingUser] = useState(false);
+  const [newUserModalError, setNewUserModalError] = useState('');
 
   useEffect(() => {
     // Só carrega se o usuário estiver autenticado
@@ -79,7 +84,7 @@ export default function UsersScreen() {
       if (resultado.error) {
         console.error('[UsersScreen] Erro ao buscar usuários:', resultado.error);
         if (resultado.error.message?.includes('Acesso negado') || resultado.error.message?.includes('permission denied')) {
-          Alert.alert('Acesso Negado', 'Apenas administradores podem acessar esta página.');
+          showWarning('Apenas administradores podem acessar esta página.');
         } else {
           // Não mostra alerta para erros comuns, apenas loga
           console.warn('[UsersScreen] Erro ao carregar usuários (não crítico):', resultado.error.message);
@@ -108,7 +113,7 @@ export default function UsersScreen() {
   const openModalChangeRole = (user: UserWithProfile) => {
     // Não pode alterar o próprio perfil
     if (user.id === userId) {
-      Alert.alert('Aviso', 'Você não pode alterar seu próprio perfil.');
+      showWarning('Você não pode alterar seu próprio perfil.');
       return;
     }
 
@@ -129,15 +134,16 @@ export default function UsersScreen() {
       if (selectedUser.has_profile) {
         // Atualizar perfil existente
         await atualizarPerfil(selectedUser.id, selectedRole);
-        Alert.alert('Sucesso', 'Perfil atualizado com sucesso!');
+        closeModal();
+        await loadUsers();
+        showSuccess('Perfil atualizado com sucesso!', { iconType: 'user', userRole: selectedRole });
       } else {
         // Criar novo perfil
         await criarPerfil(selectedUser.id, selectedRole);
-        Alert.alert('Sucesso', 'Perfil criado com sucesso!');
+        closeModal();
+        await loadUsers();
+        showSuccess('Perfil criado com sucesso!', { iconType: 'user', userRole: selectedRole });
       }
-
-      closeModal();
-      await loadUsers();
       
       // Se alterou o perfil do próprio usuário, recarrega
       if (selectedUser.id === userId) {
@@ -145,13 +151,13 @@ export default function UsersScreen() {
       }
     } catch (error: any) {
       console.error('Erro ao salvar perfil:', error);
-      Alert.alert('Erro', error.message || 'Não foi possível salvar o perfil');
+      showError(error.message || 'Não foi possível salvar o perfil');
     }
   };
 
   const handleRemoveProfile = (user: UserWithProfile) => {
     if (user.id === userId) {
-      Alert.alert('Aviso', 'Você não pode deletar sua própria conta.');
+      showWarning('Você não pode deletar sua própria conta.');
       return;
     }
 
@@ -171,8 +177,8 @@ export default function UsersScreen() {
           onPress: async () => {
             try {
               await deletarUsuarioPermanentemente(user.id);
-              Alert.alert('Sucesso', 'Usuário deletado permanentemente do sistema!');
               await loadUsers();
+              showSuccess('Usuário deletado permanentemente do sistema!', { iconType: 'user' });
             } catch (error: any) {
               console.error('Erro ao deletar usuário:', error);
               
@@ -186,7 +192,7 @@ export default function UsersScreen() {
                 );
                 await loadUsers();
               } else {
-                Alert.alert('Erro', error.message || 'Não foi possível deletar o usuário');
+                showError(error.message || 'Não foi possível deletar o usuário');
               }
             }
           },
@@ -209,6 +215,7 @@ export default function UsersScreen() {
     setNewUserEmail('');
     setNewUserPassword('');
     setNewUserRole('viewer');
+    setNewUserModalError('');
   };
 
   const validarEmail = (email: string): boolean => {
@@ -217,19 +224,21 @@ export default function UsersScreen() {
   };
 
   const handleCreateUser = async () => {
+    setNewUserModalError(''); // Limpar erro anterior
+    
     // Validações
     if (!newUserEmail.trim()) {
-      Alert.alert('Erro', 'Por favor, informe o email do usuário.');
+      setNewUserModalError('Por favor, informe o email do usuário.');
       return;
     }
 
     if (!validarEmail(newUserEmail.trim())) {
-      Alert.alert('Erro', 'Por favor, insira um email válido.');
+      setNewUserModalError('Por favor, insira um email válido.');
       return;
     }
 
     if (!newUserPassword || newUserPassword.length < 6) {
-      Alert.alert('Erro', 'A senha deve ter pelo menos 6 caracteres.');
+      setNewUserModalError('A senha deve ter pelo menos 6 caracteres.');
       return;
     }
 
@@ -258,13 +267,11 @@ export default function UsersScreen() {
       // Recarrega a lista de usuários
       await loadUsers();
       
-      // Mostra mensagem de sucesso simples e bonita
-      setTimeout(() => {
-        Alert.alert(
-          '✅ Sucesso!',
-          `Usuário ${newUserEmail.trim()} criado com sucesso!`
-        );
-      }, 200);
+      // Mostra mensagem de sucesso com cor baseada no cargo
+      showSuccess(`Usuário ${newUserEmail.trim()} criado com sucesso!`, {
+        iconType: 'user',
+        userRole: newUserRole
+      });
     } catch (error: any) {
       console.error('Erro ao criar usuário:', error);
       // Garante que o loading seja desligado mesmo em caso de erro
@@ -273,10 +280,8 @@ export default function UsersScreen() {
       // Recarrega a lista para garantir que está atualizada
       await loadUsers();
       
-      // Mostra erro após um pequeno delay para garantir que o estado foi atualizado
-      setTimeout(() => {
-        Alert.alert('Erro', error.message || 'Não foi possível criar o usuário');
-      }, 100);
+      // Mostra erro dentro do modal
+      setNewUserModalError(error.message || 'Não foi possível criar o usuário');
     }
   };
 
@@ -490,6 +495,7 @@ export default function UsersScreen() {
             )}
           </ScrollView>
         )}
+        <Toast config={toastConfig} topOffset={60} />
 
         {/* Modal de Alterar Perfil */}
         <Modal
@@ -641,6 +647,7 @@ export default function UsersScreen() {
                 </View>
               </ScrollView>
             </View>
+            <Toast config={toastConfig} topOffset={60} />
           </View>
         </Modal>
 
@@ -691,7 +698,10 @@ export default function UsersScreen() {
                         placeholder="usuario@exemplo.com"
                         placeholderTextColor="rgba(255, 255, 255, 0.5)"
                         value={newUserEmail}
-                        onChangeText={setNewUserEmail}
+                        onChangeText={(text) => {
+                          setNewUserEmail(text);
+                          setNewUserModalError('');
+                        }}
                         keyboardType="email-address"
                         autoCapitalize="none"
                         autoCorrect={false}
@@ -708,7 +718,10 @@ export default function UsersScreen() {
                         placeholder="Mínimo 6 caracteres"
                         placeholderTextColor="rgba(255, 255, 255, 0.5)"
                         value={newUserPassword}
-                        onChangeText={setNewUserPassword}
+                        onChangeText={(text) => {
+                          setNewUserPassword(text);
+                          setNewUserModalError('');
+                        }}
                         secureTextEntry
                         autoCapitalize="none"
                         autoCorrect={false}
@@ -826,6 +839,13 @@ export default function UsersScreen() {
                     </TouchableOpacity>
                   </View>
 
+                  {/* Error Message */}
+                  {newUserModalError !== '' && (
+                    <View style={styles.errorContainer}>
+                      <Text style={styles.errorText}>{newUserModalError}</Text>
+                    </View>
+                  )}
+
                   <View style={styles.modalActions}>
                     <Button
                       title={creatingUser ? 'Criando...' : 'Criar Usuário'}
@@ -844,6 +864,7 @@ export default function UsersScreen() {
                 </View>
               </ScrollView>
             </View>
+            <Toast config={toastConfig} topOffset={60} />
           </View>
         </Modal>
       </View>
@@ -1182,5 +1203,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.6)',
     marginTop: 4,
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.5)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });

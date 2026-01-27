@@ -43,8 +43,10 @@ const toastConfigs: Record<ToastType, ToastConfig> = {
 const CustomToast = ({ type, text1, text2, onPress, props }: any) => {
   const config = toastConfigs[type as ToastType] || toastConfigs.info;
   
-  // Extrair transactionType de props
+  // Extrair transactionType, iconType e userRole de props
   const transactionType = props?.transactionType;
+  const iconType = props?.iconType;
+  const userRole = props?.userRole;
   
   // Determinar mensagem principal e se há título
   // Prioridade: text2 (mensagem) > text1 (título ou mensagem)
@@ -59,10 +61,72 @@ const CustomToast = ({ type, text1, text2, onPress, props }: any) => {
   const transactionColor = transactionType === 'receita' ? '#10B981' : '#EF4444';
   const transactionBg = transactionType === 'receita' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)';
 
-  const iconName = isTransaction ? transactionIcon : config.iconName;
-  const iconColor = isTransaction ? transactionColor : config.iconColor;
-  const iconBg = isTransaction ? transactionBg : config.backgroundColor;
-  const borderColor = isTransaction ? transactionColor : config.borderColor;
+  // Se for uma notificação de empresa, usar ícone de empresa
+  const isCompany = iconType === 'company';
+  const companyIcon = 'building.columns.fill';
+  const companyColor = '#00b09b';
+  const companyBg = 'rgba(0, 176, 155, 0.25)';
+
+  // Se for uma notificação de usuário, usar ícone de usuário
+  const isUser = iconType === 'user';
+  const userIcon = 'person.crop.circle.fill';
+  // Cores baseadas no cargo: azul para analista, amarelo para visualizador, vermelho para administrador
+  let userColor = '#6366F1'; // padrão azul
+  let userBg = 'rgba(99, 102, 241, 0.25)';
+  if (userRole === 'admin') {
+    userColor = '#EF4444'; // vermelho
+    userBg = 'rgba(239, 68, 68, 0.25)';
+  } else if (userRole === 'analista') {
+    userColor = '#3B82F6'; // azul
+    userBg = 'rgba(59, 130, 246, 0.25)';
+  } else if (userRole === 'viewer') {
+    userColor = '#FBBF24'; // amarelo
+    userBg = 'rgba(251, 191, 36, 0.25)';
+  }
+
+  // Se for uma notificação de título/conta a pagar/receber
+  const isTitle = iconType === 'title';
+  const titleIcon = 'creditcard';
+  const titleColor = '#00b09b';
+  const titleBg = 'rgba(0, 176, 155, 0.25)';
+
+  // Se for uma notificação de conta bancária
+  const isAccount = iconType === 'account';
+  const accountIcon = 'building.columns.fill';
+  const accountColor = '#00b09b';
+  const accountBg = 'rgba(0, 176, 155, 0.25)';
+
+  let iconName = config.iconName;
+  let iconColor = config.iconColor;
+  let iconBg = config.backgroundColor;
+  let borderColor = config.borderColor;
+
+  if (isTransaction) {
+    iconName = transactionIcon;
+    iconColor = transactionColor;
+    iconBg = transactionBg;
+    borderColor = transactionColor;
+  } else if (isCompany) {
+    iconName = companyIcon;
+    iconColor = companyColor;
+    iconBg = companyBg;
+    borderColor = companyColor;
+  } else if (isUser) {
+    iconName = userIcon;
+    iconColor = userColor;
+    iconBg = userBg;
+    borderColor = userColor;
+  } else if (isTitle) {
+    iconName = titleIcon;
+    iconColor = titleColor;
+    iconBg = titleBg;
+    borderColor = titleColor;
+  } else if (isAccount) {
+    iconName = accountIcon;
+    iconColor = accountColor;
+    iconBg = accountBg;
+    borderColor = accountColor;
+  }
 
   const BlurWrapper = Platform.OS === 'web' ? View : BlurView;
   const blurProps = Platform.OS === 'web' ? {} : { intensity: 80, tint: 'dark' as const };

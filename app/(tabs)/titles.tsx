@@ -23,6 +23,9 @@ import { useCompany } from '@/contexts/CompanyContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
 import { useScreenAnimations } from '@/hooks/use-screen-animations';
+import { useNotification } from '@/hooks/use-notification';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from '@/components/NotificationToast';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
 import {
   buscarTitulos,
@@ -44,6 +47,7 @@ export default function TitlesScreen() {
   const { userId } = useAuth();
   const { selectedCompany } = useCompany();
   const { canEdit, canDelete, isViewerOnly } = usePermissions();
+  const { showSuccess, showError, showWarning } = useNotification();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
   const { animatedStyle: headerStyle } = useScreenAnimations(0);
   const { animatedStyle: searchStyle } = useScreenAnimations(100);
@@ -117,7 +121,7 @@ export default function TitlesScreen() {
 
   const openModalAdd = () => {
     if (isViewerOnly) {
-      Alert.alert('Acesso Negado', 'Você não tem permissão para adicionar títulos.');
+      showWarning('Você não tem permissão para adicionar títulos.');
       return;
     }
 
@@ -126,9 +130,17 @@ export default function TitlesScreen() {
     setModalVisible(true);
   };
 
+  // Função para converter data ISO (YYYY-MM-DD) para formato brasileiro (DD/MM/YYYY)
+  const converterDataParaBrasileira = (dataISO: string): string => {
+    if (!dataISO) return '';
+    const partes = dataISO.split('-');
+    if (partes.length !== 3) return dataISO;
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+  };
+
   const openModalEdit = (title: TitleWithAccount) => {
     if (!canEdit) {
-      Alert.alert('Acesso Negado', 'Você não tem permissão para editar títulos.');
+      showWarning('Você não tem permissão para editar títulos.');
       return;
     }
 
@@ -136,7 +148,8 @@ export default function TitlesScreen() {
     setFornecedorCliente(title.fornecedor_cliente);
     setDescricao(title.descricao || '');
     setValor(formatCurrency(title.valor));
-    setDataVencimento(title.data_vencimento);
+    // Converte data ISO para formato brasileiro ao editar
+    setDataVencimento(converterDataParaBrasileira(title.data_vencimento));
     setTipo(title.tipo);
     setContaBancariaId(title.conta_bancaria_id || null);
     setModalVisible(true);
@@ -155,10 +168,97 @@ export default function TitlesScreen() {
     setDataVencimento('');
     setTipo('pagar');
     setContaBancariaId(null);
-    setModalError('');
+  };
+
+  // Função para formatar data brasileira (DD/MM/YYYY)
+  const formatarDataBrasileira = (text: string): string => {
+    // Remove tudo que não é dígito
+    let numbers = text.replace(/\D/g, '');
+    
+    // Limita a 8 dígitos (DDMMYYYY)
+    if (numbers.length > 8) {
+      numbers = numbers.slice(0, 8);
+    }
+    
+    // Adiciona barras automaticamente
+    if (numbers.length <= 2) {
+      return numbers;
+    } else if (numbers.length <= 4) {
+      return `${numbers.slice(0, 2)}/${numbers.slice(2)}`;
+    } else {
+      return `${numbers.slice(0, 2)}/${numbers.slice(2, 4)}/${numbers.slice(4)}`;
+    }
+  };
+
+  // Função para converter data brasileira (DD/MM/YYYY) para formato ISO (YYYY-MM-DD)
+  const converterDataParaISO = (dataBR: string): string | null => {
+    const partes = dataBR.split('/');
+    if (partes.length !== 3) return null;
+    
+    const dia = parseInt(partes[0], 10);
+    const mes = parseInt(partes[1], 10);
+    const ano = parseInt(partes[2], 10);
+    
+    if (isNaN(dia) || isNaN(mes) || isNaN(ano)) return null;
+    
+    // Formata como YYYY-MM-DD
+    return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+  };
+
+  // Função para validar data brasileira
+  const validarDataBrasileira = (dataBR: string): { valido: boolean; mensagem?: string } => {
+    if (!dataBR || dataBR.trim() === '') {
+      return { valido: false, mensagem: 'Data de vencimento é obrigatória' };
+    }
+
+    const partes = dataBR.split('/');
+    if (partes.length !== 3) {
+      return { valido: false, mensagem: 'Data inválida. Use o formato DD/MM/YYYY' };
+    }
+
+    const dia = parseInt(partes[0], 10);
+    const mes = parseInt(partes[1], 10);
+    const ano = parseInt(partes[2], 10);
+
+    if (isNaN(dia) || isNaN(mes) || isNaN(ano)) {
+      return { valido: false, mensagem: 'Data inválida. Use apenas números' };
+    }
+
+    // Valida mês
+    if (mes < 1 || mes > 12) {
+      return { valido: false, mensagem: 'Mês inválido. O mês deve estar entre 01 e 12' };
+    }
+
+    // Valida dia
+    const diasNoMes = new Date(ano, mes, 0).getDate();
+    if (dia < 1 || dia > diasNoMes) {
+      return { valido: false, mensagem: `Dia inválido. Este mês tem apenas ${diasNoMes} dias` };
+    }
+
+    // Valida ano (deve ser entre 1900 e 2100)
+    if (ano < 1900 || ano > 2100) {
+      return { valido: false, mensagem: 'Ano inválido. Use um ano entre 1900 e 2100' };
+    }
+
+    // Cria objeto Date para validar se a data é válida
+    const data = new Date(ano, mes - 1, dia);
+    if (data.getFullYear() !== ano || data.getMonth() !== mes - 1 || data.getDate() !== dia) {
+      return { valido: false, mensagem: 'Data inválida' };
+    }
+
+    // Verifica se a data já passou
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0); // Remove horas para comparar apenas datas
+    if (data < hoje) {
+      return { valido: false, mensagem: 'A data de vencimento não pode ser no passado' };
+    }
+
+    return { valido: true };
   };
 
   const validateForm = (): boolean => {
+    setModalError(''); // Limpar erro anterior
+    
     if (!fornecedorCliente.trim()) {
       setModalError('Fornecedor/Cliente é obrigatório');
       return false;
@@ -170,8 +270,10 @@ export default function TitlesScreen() {
       return false;
     }
 
-    if (!dataVencimento) {
-      setModalError('Data de vencimento é obrigatória');
+    // Valida data brasileira
+    const validacaoData = validarDataBrasileira(dataVencimento);
+    if (!validacaoData.valido) {
+      setModalError(validacaoData.mensagem || 'Data de vencimento inválida');
       return false;
     }
 
@@ -182,22 +284,29 @@ export default function TitlesScreen() {
     if (!validateForm() || !userId) return;
 
     try {
+      // Converte data brasileira (DD/MM/YYYY) para formato ISO (YYYY-MM-DD)
+      const dataISO = converterDataParaISO(dataVencimento);
+      if (!dataISO) {
+        setModalError('Erro ao converter data. Verifique o formato.');
+        return;
+      }
+
       const titleData = {
         codigo_empresa: userId,
         fornecedor_cliente: fornecedorCliente.trim(),
         descricao: descricao.trim() || undefined,
         valor: parseCurrencyBRL(valor),
-        data_vencimento: dataVencimento,
+        data_vencimento: dataISO,
         tipo,
         conta_bancaria_id: contaBancariaId,
       };
 
       if (editingTitle) {
         await atualizarTitulo(editingTitle.id!, titleData);
-        Alert.alert('Sucesso', 'Título atualizado com sucesso!');
+        showSuccess('Título atualizado com sucesso!', { iconType: 'title' });
       } else {
         await criarTitulo(titleData);
-        Alert.alert('Sucesso', 'Título criado com sucesso!');
+        showSuccess('Título criado com sucesso!', { iconType: 'title' });
       }
 
       closeModal();
@@ -210,23 +319,23 @@ export default function TitlesScreen() {
 
   const handleMarkAsPaid = async (title: TitleWithAccount) => {
     if (!canEdit || !userId) {
-      Alert.alert('Acesso Negado', 'Você não tem permissão para marcar títulos como pagos.');
+      showWarning('Você não tem permissão para marcar títulos como pagos.');
       return;
     }
 
     try {
       await marcarTituloComoPago(userId, title.id!, undefined, title.conta_bancaria_id || undefined);
-      Alert.alert('Sucesso', 'Título marcado como pago e transação criada!');
+      showSuccess('Título marcado como pago e transação criada!', { iconType: 'title' });
       await loadData();
     } catch (error: any) {
       console.error('Erro ao marcar como pago:', error);
-      Alert.alert('Erro', error.message || 'Não foi possível marcar como pago');
+      showError(error.message || 'Não foi possível marcar como pago');
     }
   };
 
   const handleUnmarkAsPaid = async (title: TitleWithAccount) => {
     if (!canEdit) {
-      Alert.alert('Acesso Negado', 'Você não tem permissão para desmarcar títulos.');
+      showWarning('Você não tem permissão para desmarcar títulos.');
       return;
     }
 
@@ -240,11 +349,11 @@ export default function TitlesScreen() {
           onPress: async () => {
             try {
               await desmarcarTituloComoPago(title.id!);
-              Alert.alert('Sucesso', 'Título desmarcado como pago!');
+              showSuccess('Título desmarcado como pago!', { iconType: 'title' });
               await loadData();
             } catch (error: any) {
               console.error('Erro ao desmarcar:', error);
-              Alert.alert('Erro', error.message || 'Não foi possível desmarcar');
+              showError(error.message || 'Não foi possível desmarcar');
             }
           },
         },
@@ -254,7 +363,7 @@ export default function TitlesScreen() {
 
   const confirmDelete = (title: TitleWithAccount) => {
     if (!canDelete) {
-      Alert.alert('Acesso Negado', 'Você não tem permissão para deletar títulos.');
+      showWarning('Você não tem permissão para deletar títulos.');
       return;
     }
 
@@ -269,11 +378,11 @@ export default function TitlesScreen() {
           onPress: async () => {
             try {
               await deletarTitulo(title.id!);
-              Alert.alert('Sucesso', 'Título excluído com sucesso!');
+              showSuccess('Título excluído com sucesso!', { iconType: 'title' });
               await loadData();
             } catch (error: any) {
               console.error('Erro ao deletar título:', error);
-              Alert.alert('Erro', error.message || 'Não foi possível excluir o título');
+              showError(error.message || 'Não foi possível excluir o título');
             }
           },
         },
@@ -761,18 +870,11 @@ export default function TitlesScreen() {
                   <TextInput
                     value={dataVencimento}
                     onChangeText={(text) => {
-                      // Formata como YYYY-MM-DD
-                      let formatted = text.replace(/\D/g, '');
-                      if (formatted.length >= 4) {
-                        formatted = formatted.slice(0, 4) + '-' + formatted.slice(4);
-                      }
-                      if (formatted.length >= 7) {
-                        formatted = formatted.slice(0, 7) + '-' + formatted.slice(7, 9);
-                      }
+                      const formatted = formatarDataBrasileira(text);
                       setDataVencimento(formatted);
                       setModalError('');
                     }}
-                    placeholder="YYYY-MM-DD (ex: 2024-12-31)"
+                    placeholder="DD/MM/YYYY (ex: 31/12/2024)"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     keyboardType="numeric"
                     maxLength={10}
@@ -831,6 +933,7 @@ export default function TitlesScreen() {
                 </View>
               </View>
             </ScrollView>
+            <Toast config={toastConfig} topOffset={60} />
           </View>
         </View>
       </Modal>

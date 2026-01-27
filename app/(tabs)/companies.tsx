@@ -1,3 +1,29 @@
+import { AnimatedBackground } from '@/components/animated-background';
+import { GlassContainer } from '@/components/glass-container';
+import { toastConfig } from '@/components/NotificationToast';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
+import { usePermissions } from '@/contexts/PermissionsContext';
+import { useNotification } from '@/hooks/use-notification';
+import { useScreenAnimations } from '@/hooks/use-screen-animations';
+import { useScrollToTop } from '@/hooks/use-scroll-to-top';
+import {
+  atualizarEmpresa,
+  buscarEmpresas,
+  criarEmpresa,
+  deletarEmpresa,
+  formatarCEP,
+  formatarCNPJ,
+  formatarTelefone,
+  limparCNPJ,
+  validarCNPJ,
+  validarEmail,
+  type Company,
+} from '@/lib/services/companies';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,30 +38,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AnimatedBackground } from '@/components/animated-background';
-import { GlassContainer } from '@/components/glass-container';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { ThemedText } from '@/components/themed-text';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/AuthContext';
-import { useCompany } from '@/contexts/CompanyContext';
-import { usePermissions } from '@/contexts/PermissionsContext';
-import { useScrollToTop } from '@/hooks/use-scroll-to-top';
-import { useScreenAnimations } from '@/hooks/use-screen-animations';
-import {
-  buscarEmpresas,
-  criarEmpresa,
-  atualizarEmpresa,
-  deletarEmpresa,
-  validarCNPJ,
-  formatarCNPJ,
-  limparCNPJ,
-  formatarCEP,
-  formatarTelefone,
-  validarEmail,
-  type Company,
-} from '@/lib/services/companies';
+import Toast from 'react-native-toast-message';
 
 type FilterStatus = 'all' | 'active' | 'inactive';
 
@@ -44,6 +47,7 @@ export default function CompaniesScreen() {
   const { userId } = useAuth();
   const { selectedCompany } = useCompany();
   const { canEdit, canDelete, isViewerOnly } = usePermissions();
+  const { showSuccess, showError, showWarning } = useNotification();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
   const { animatedStyle: headerStyle } = useScreenAnimations(0);
   const { animatedStyle: searchStyle } = useScreenAnimations(100);
@@ -111,7 +115,7 @@ export default function CompaniesScreen() {
 
   const openModalAdd = () => {
     if (isViewerOnly) {
-      Alert.alert('Acesso Negado', 'Você não tem permissão para adicionar empresas.');
+      showWarning('Você não tem permissão para adicionar empresas.');
       return;
     }
 
@@ -122,7 +126,7 @@ export default function CompaniesScreen() {
 
   const openModalEdit = (company: Company) => {
     if (!canEdit) {
-      Alert.alert('Acesso Negado', 'Você não tem permissão para editar empresas.');
+      showWarning('Você não tem permissão para editar empresas.');
       return;
     }
 
@@ -217,23 +221,27 @@ export default function CompaniesScreen() {
 
       if (editingCompany) {
         await atualizarEmpresa(editingCompany.id!, companyData);
-        Alert.alert('Sucesso', 'Empresa atualizada com sucesso!');
+        closeModal();
+        await loadCompanies();
+        showSuccess('Empresa atualizada com sucesso!', { iconType: 'company' });
       } else {
         await criarEmpresa(companyData);
-        Alert.alert('Sucesso', 'Empresa criada com sucesso!');
+        closeModal();
+        await loadCompanies();
+        showSuccess('Empresa criada com sucesso!', { iconType: 'company' });
       }
-
-      closeModal();
-      await loadCompanies();
     } catch (error: any) {
       console.error('Erro ao salvar empresa:', error);
-      setModalError(error.message || 'Erro ao salvar empresa');
+      const errorMessage = error.message || 'Erro ao salvar empresa';
+      setModalError(errorMessage);
+      // Mostrar erro apenas dentro do modal, não na tela principal
+      // O erro já está sendo exibido via modalError no formulário
     }
   };
 
   const confirmDelete = (company: Company) => {
     if (!canDelete) {
-      Alert.alert('Acesso Negado', 'Você não tem permissão para deletar empresas.');
+      showWarning('Você não tem permissão para deletar empresas.');
       return;
     }
 
@@ -248,11 +256,11 @@ export default function CompaniesScreen() {
           onPress: async () => {
             try {
               await deletarEmpresa(company.id!);
-              Alert.alert('Sucesso', 'Empresa excluída com sucesso!');
+              showSuccess('Empresa excluída com sucesso!', { iconType: 'company' });
               await loadCompanies();
             } catch (error: any) {
               console.error('Erro ao deletar empresa:', error);
-              Alert.alert('Erro', error.message || 'Não foi possível excluir a empresa');
+              showError(error.message || 'Não foi possível excluir a empresa');
             }
           },
         },
@@ -733,9 +741,11 @@ export default function CompaniesScreen() {
                 </View>
               </View>
             </ScrollView>
+            <Toast config={toastConfig} topOffset={60} />
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+      <Toast config={toastConfig} topOffset={60} />
     </View>
   );
 }

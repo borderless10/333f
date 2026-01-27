@@ -45,6 +45,7 @@ const MAPPING = {
   'mappin': 'location-on',
   'location.fill': 'location-on',
   'location': 'location-on',
+  'creditcard': 'credit-card',
 } as IconMapping;
 
 /**

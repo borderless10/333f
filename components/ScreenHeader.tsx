@@ -100,7 +100,6 @@ export function ScreenHeader({
               transform: [{ translateX: Animated.multiply(slideAnim, -1) }],
             },
           ]}>
-          {showCompanySelector && <CompanySelector />}
           {rightAction && rightAction.visible !== false && (
             <TouchableOpacity
               style={styles.actionButton}
@@ -109,6 +108,7 @@ export function ScreenHeader({
               <MaterialIcons name={rightAction.icon as any} size={28} color="#00b09b" />
             </TouchableOpacity>
           )}
+          {showCompanySelector && <CompanySelector />}
         </Animated.View>
       </View>
     </Animated.View>
