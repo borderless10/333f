@@ -43,10 +43,11 @@ const toastConfigs: Record<ToastType, ToastConfig> = {
 const CustomToast = ({ type, text1, text2, onPress, props }: any) => {
   const config = toastConfigs[type as ToastType] || toastConfigs.info;
   
-  // Extrair transactionType, iconType e userRole de props
+  // Extrair transactionType, iconType, userRole e customIcon de props
   const transactionType = props?.transactionType;
   const iconType = props?.iconType;
   const userRole = props?.userRole;
+  const customIcon = props?.customIcon;
   
   // Determinar mensagem principal e se há título
   // Prioridade: text2 (mensagem) > text1 (título ou mensagem)
@@ -96,7 +97,31 @@ const CustomToast = ({ type, text1, text2, onPress, props }: any) => {
   const accountColor = '#00b09b';
   const accountBg = 'rgba(0, 176, 155, 0.25)';
 
-  let iconName = config.iconName;
+  // Se for uma notificação de conexão/link
+  const isLink = iconType === 'link';
+  const linkIcon = 'link.circle.fill';
+  const linkColor = '#00b09b';
+  const linkBg = 'rgba(0, 176, 155, 0.25)';
+
+  // Se for uma notificação de conciliação
+  const isReconciliation = iconType === 'reconciliation';
+  const reconciliationIcon = 'checkmark.circle.fill';
+  const reconciliationColor = '#10B981';
+  const reconciliationBg = 'rgba(16, 185, 129, 0.25)';
+
+  // Se for uma notificação de match automático
+  const isAutoMatch = iconType === 'auto_match';
+  const autoMatchIcon = 'sparkles';
+  const autoMatchColor = '#8B5CF6';
+  const autoMatchBg = 'rgba(139, 92, 246, 0.25)';
+
+  // Se for uma notificação de exportação
+  const isExport = iconType === 'export';
+  const exportIcon = 'square.and.arrow.up.fill';
+  const exportColor = '#00b09b';
+  const exportBg = 'rgba(0, 176, 155, 0.25)';
+
+  let iconName = customIcon || config.iconName; // Usar ícone customizado se fornecido
   let iconColor = config.iconColor;
   let iconBg = config.backgroundColor;
   let borderColor = config.borderColor;
@@ -126,6 +151,26 @@ const CustomToast = ({ type, text1, text2, onPress, props }: any) => {
     iconColor = accountColor;
     iconBg = accountBg;
     borderColor = accountColor;
+  } else if (isLink) {
+    iconName = linkIcon;
+    iconColor = linkColor;
+    iconBg = linkBg;
+    borderColor = linkColor;
+  } else if (isReconciliation) {
+    iconName = reconciliationIcon;
+    iconColor = reconciliationColor;
+    iconBg = reconciliationBg;
+    borderColor = reconciliationColor;
+  } else if (isAutoMatch) {
+    iconName = autoMatchIcon;
+    iconColor = autoMatchColor;
+    iconBg = autoMatchBg;
+    borderColor = autoMatchColor;
+  } else if (isExport) {
+    iconName = exportIcon;
+    iconColor = exportColor;
+    iconBg = exportBg;
+    borderColor = exportColor;
   }
 
   const BlurWrapper = Platform.OS === 'web' ? View : BlurView;

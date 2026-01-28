@@ -7,8 +7,9 @@ export interface NotificationOptions {
   duration?: number;
   onPress?: () => void;
   transactionType?: 'receita' | 'despesa';
-  iconType?: 'company' | 'account' | 'user' | 'title';
+  iconType?: 'company' | 'account' | 'user' | 'title' | 'link' | 'reconciliation' | 'auto_match' | 'export';
   userRole?: 'admin' | 'analista' | 'viewer';
+  icon?: string; // Ícone customizado (nome do ícone SF Symbols)
 }
 
 /**
@@ -32,6 +33,7 @@ export function useNotification() {
         transactionType: options?.transactionType, // Passar tipo de transação através de props
         iconType: options?.iconType, // Passar tipo de ícone através de props
         userRole: options?.userRole, // Passar cargo do usuário através de props
+        customIcon: options?.icon, // Passar ícone customizado através de props
       },
     } as any);
   }, []);

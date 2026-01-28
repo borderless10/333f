@@ -3,6 +3,8 @@ import { CSVImportModal } from '@/components/csv-import-modal';
 import { GlassContainer } from '@/components/glass-container';
 import { NewTransactionModal } from '@/components/new-transaction-modal';
 import { ReportsModal } from '@/components/reports-modal';
+import { ReconciliationModal } from '@/components/reconciliation-modal';
+import { ReconciliationHistoryModal } from '@/components/reconciliation-history-modal';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -11,10 +13,11 @@ import { useCompany } from '@/contexts/CompanyContext';
 import { useNotification } from '@/hooks/use-notification';
 import { buscarTransacoes, type TransactionWithAccount } from '@/lib/services/transactions';
 import { formatCurrency } from '@/lib/utils/currency';
+import { generateReconciliationReport, shareReconciliationReport } from '@/lib/services/reconciliation-export';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
 import React, { useEffect, useMemo } from 'react';
-import { ActivityIndicator, Animated, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
@@ -22,6 +25,9 @@ export default function DashboardScreen() {
   const [csvImportVisible, setCsvImportVisible] = React.useState(false);
   const [reportsVisible, setReportsVisible] = React.useState(false);
   const [newTransactionVisible, setNewTransactionVisible] = React.useState(false);
+  const [reconciliationVisible, setReconciliationVisible] = React.useState(false);
+  const [reconciliationHistoryVisible, setReconciliationHistoryVisible] = React.useState(false);
+  const [exportingReport, setExportingReport] = React.useState(false);
   const [transactions, setTransactions] = React.useState<TransactionWithAccount[]>([]);
   const [loading, setLoading] = React.useState(true);
   const insets = useSafeAreaInsets();
@@ -31,7 +37,9 @@ export default function DashboardScreen() {
 
   // Animações
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
-  const slideAnim = React.useRef(new Animated.Value(30)).current;
+  // CRÍTICO: Inicializar com 0 para evitar erro no Android/Fabric
+  // O valor inicial numérico pode causar problemas quando renderizado antes da animação
+  const slideAnim = React.useRef(new Animated.Value(0)).current;
   const balanceCardAnim = React.useRef(new Animated.Value(0)).current;
   const incomeCardAnim = React.useRef(new Animated.Value(0)).current;
   const expenseCardAnim = React.useRef(new Animated.Value(0)).current;
@@ -39,51 +47,144 @@ export default function DashboardScreen() {
   const actionsAnim = React.useRef(new Animated.Value(0)).current;
   const scaleAnim3 = React.useRef(new Animated.Value(1)).current;
   const scaleAnim4 = React.useRef(new Animated.Value(1)).current;
+  const scaleAnim5 = React.useRef(new Animated.Value(1)).current;
+  const scaleAnim6 = React.useRef(new Animated.Value(1)).current;
+  const reconciliationAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
-    // Animação de entrada escalonada
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(balanceCardAnim, {
-        toValue: 1,
-        duration: 500,
-        delay: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(incomeCardAnim, {
-        toValue: 1,
-        duration: 500,
-        delay: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(expenseCardAnim, {
-        toValue: 1,
-        duration: 500,
-        delay: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(transactionsAnim, {
-        toValue: 1,
-        duration: 500,
-        delay: 350,
-        useNativeDriver: true,
-      }),
-      Animated.timing(actionsAnim, {
-        toValue: 1,
-        duration: 500,
-        delay: 400,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    let animations: Animated.CompositeAnimation | null = null;
+    const isMountedRef = { current: true };
+    let animationTimeout: any = null;
+
+    // Função segura para resetar valores sem causar erros de imutabilidade
+    const safeResetValue = (anim: Animated.Value, initialValue: number) => {
+      try {
+        if (isMountedRef.current) {
+          anim.setValue(initialValue);
+        }
+      } catch (error) {
+        // Ignorar erros de imutabilidade durante cleanup
+        console.warn('Erro ao resetar valor de animação (pode ser ignorado durante cleanup):', error);
+      }
+    };
+
+    // Parar animação anterior de forma segura
+    const stopPreviousAnimation = () => {
+      try {
+        if (animations) {
+          animations.stop();
+          animations = null;
+        }
+      } catch (error) {
+        // Ignorar erros ao parar animação anterior
+      }
+    };
+
+    // Parar animação anterior
+    stopPreviousAnimation();
+
+    // Resetar todos os valores de forma segura (sem callbacks que podem causar problemas)
+    safeResetValue(fadeAnim, 0);
+    // CRÍTICO: slideAnim deve começar com 0 para evitar erro no Android/Fabric
+    // Será resetado para 30 apenas dentro do timeout, antes de iniciar a animação
+    safeResetValue(slideAnim, 0);
+    safeResetValue(balanceCardAnim, 0);
+    safeResetValue(incomeCardAnim, 0);
+    safeResetValue(expenseCardAnim, 0);
+    safeResetValue(transactionsAnim, 0);
+    safeResetValue(actionsAnim, 0);
+    safeResetValue(reconciliationAnim, 0);
+
+    // Delay maior no Android para garantir estabilidade
+    animationTimeout = setTimeout(() => {
+      if (!isMountedRef.current) return;
+
+      try {
+        // Resetar slideAnim para 30 apenas agora, antes de iniciar a animação
+        // Isso garante que o componente já foi renderizado com valor inicial 0
+        safeResetValue(slideAnim, 30);
+        
+        // Animação de entrada escalonada
+        animations = Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(balanceCardAnim, {
+            toValue: 1,
+            duration: 500,
+            delay: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(incomeCardAnim, {
+            toValue: 1,
+            duration: 500,
+            delay: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(expenseCardAnim, {
+            toValue: 1,
+            duration: 500,
+            delay: 250,
+            useNativeDriver: true,
+          }),
+          Animated.timing(transactionsAnim, {
+            toValue: 1,
+            duration: 500,
+            delay: 350,
+            useNativeDriver: true,
+          }),
+          Animated.timing(actionsAnim, {
+            toValue: 1,
+            duration: 500,
+            delay: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(reconciliationAnim, {
+            toValue: 1,
+            duration: 500,
+            delay: 450,
+            useNativeDriver: true,
+          }),
+        ]);
+
+        // Não usar callback no start() para evitar problemas com propriedades somente leitura
+        animations.start();
+      } catch (error) {
+        console.warn('Erro ao iniciar animação:', error);
+      }
+    }, Platform.OS === 'android' ? 100 : 16); // Delay maior no Android para garantir estabilidade
+
+    // Cleanup: parar animações ao desmontar
+    return () => {
+      isMountedRef.current = false;
+
+      // Limpar timeout se ainda não executou
+      if (animationTimeout) {
+        clearTimeout(animationTimeout);
+        animationTimeout = null;
+      }
+
+      // Parar animação de forma segura
+      try {
+        if (animations) {
+          animations.stop();
+          animations = null;
+        }
+      } catch (error) {
+        // Ignorar erros durante cleanup
+      }
+
+      // Não chamar stopAnimation() durante cleanup - pode causar erros de imutabilidade
+      // As animações serão limpas automaticamente quando o componente for desmontado
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Carregar transações do Supabase
@@ -130,60 +231,153 @@ export default function DashboardScreen() {
   const scaleAnim2 = React.useRef(new Animated.Value(1)).current;
   
   const handlePressIn1 = () => {
-    Animated.spring(scaleAnim1, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
+    scaleAnim1.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim1, {
+        toValue: 0.95,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
   };
   const handlePressOut1 = () => {
-    Animated.spring(scaleAnim1, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    scaleAnim1.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim1, {
+        toValue: 1,
+        friction: 3,
+        tension: 40,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
   };
   const handlePressIn2 = () => {
-    Animated.spring(scaleAnim2, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
+    scaleAnim2.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim2, {
+        toValue: 0.95,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
   };
   const handlePressOut2 = () => {
-    Animated.spring(scaleAnim2, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    scaleAnim2.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim2, {
+        toValue: 1,
+        friction: 3,
+        tension: 40,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
   };
   const handlePressIn3 = () => {
-    Animated.spring(scaleAnim3, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
+    scaleAnim3.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim3, {
+        toValue: 0.95,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
   };
   const handlePressOut3 = () => {
-    Animated.spring(scaleAnim3, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    scaleAnim3.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim3, {
+        toValue: 1,
+        friction: 3,
+        tension: 40,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
   };
   const handlePressIn4 = () => {
-    Animated.spring(scaleAnim4, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
+    scaleAnim4.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim4, {
+        toValue: 0.95,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
   };
   const handlePressOut4 = () => {
-    Animated.spring(scaleAnim4, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    scaleAnim4.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim4, {
+        toValue: 1,
+        friction: 3,
+        tension: 40,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
+  };
+  const handlePressIn5 = () => {
+    scaleAnim5.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim5, {
+        toValue: 0.95,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
+  };
+  const handlePressOut5 = () => {
+    scaleAnim5.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim5, {
+        toValue: 1,
+        friction: 3,
+        tension: 40,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
+  };
+  const handlePressIn6 = () => {
+    scaleAnim6.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim6, {
+        toValue: 0.95,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
+  };
+  const handlePressOut6 = () => {
+    scaleAnim6.stopAnimation(() => {
+      const anim = Animated.spring(scaleAnim6, {
+        toValue: 1,
+        friction: 3,
+        tension: 40,
+        useNativeDriver: true,
+      });
+      anim.start();
+    });
+  };
+
+  const handleExportReport = async () => {
+    if (!userId) return;
+
+    Alert.alert(
+      'Exportar Relatório',
+      'Escolha o formato:',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'CSV',
+          onPress: async () => {
+            try {
+              setExportingReport(true);
+              const report = await generateReconciliationReport(userId);
+              await shareReconciliationReport(report, 'csv');
+              showSuccess('Relatório exportado com sucesso!', {
+                iconType: 'export',
+              });
+            } catch (error: any) {
+              showError(error.message || 'Não foi possível exportar o relatório');
+            } finally {
+              setExportingReport(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Calcular dados financeiros a partir das transações reais
@@ -249,17 +443,28 @@ export default function DashboardScreen() {
 
   React.useEffect(() => {
     // Animar cada item de transação com delay escalonado
+    const animations: Animated.CompositeAnimation[] = [];
+    
     transactionAnims.forEach((anim: Animated.Value, index: number) => {
       if (index < recentTransactions.length) {
-        anim.setValue(0);
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 400,
-          delay: 450 + (index * 50),
-          useNativeDriver: true,
-        }).start();
+        anim.stopAnimation(() => {
+          anim.setValue(0);
+          const timingAnim = Animated.timing(anim, {
+            toValue: 1,
+            duration: 400,
+            delay: 450 + (index * 50),
+            useNativeDriver: true,
+          });
+          animations.push(timingAnim);
+          timingAnim.start();
+        });
       }
     });
+
+    // Cleanup
+    return () => {
+      animations.forEach(anim => anim.stop());
+    };
   }, [recentTransactions.length]);
 
   if (loading && transactions.length === 0) {
@@ -527,6 +732,86 @@ export default function DashboardScreen() {
           </GlassContainer>
         </Animated.View>
 
+        {/* Conciliação Bancária */}
+        <Animated.View 
+          style={[
+            styles.section,
+            {
+              opacity: reconciliationAnim,
+              transform: [
+                {
+                  translateY: reconciliationAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0],
+                  }),
+                },
+              ],
+            },
+          ]}>
+          <View style={styles.sectionHeader}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Conciliação Bancária
+            </ThemedText>
+          </View>
+          <GlassContainer style={styles.reconciliationCard}>
+            <View style={styles.reconciliationContent}>
+              <View style={styles.reconciliationIconContainer}>
+                <MaterialIcons name="compare-arrows" size={32} color="#00b09b" />
+              </View>
+              <View style={styles.reconciliationTextContainer}>
+                <ThemedText type="defaultSemiBold" style={styles.reconciliationTitle}>
+                  Concilie transações bancárias
+                </ThemedText>
+                <ThemedText style={styles.reconciliationSubtitle}>
+                  Match automático por valor, data e descrição
+                </ThemedText>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.reconciliationButton}
+              onPress={() => {
+                if (!reconciliationVisible) {
+                  setReconciliationVisible(true);
+                }
+              }}
+              activeOpacity={0.8}>
+              <MaterialIcons name="compare-arrows" size={18} color="#FFFFFF" />
+              <Text style={styles.reconciliationButtonText}>Iniciar Conciliação</Text>
+            </TouchableOpacity>
+          </GlassContainer>
+          <View style={styles.reconciliationActions}>
+            <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnim5 }] }}>
+              <TouchableOpacity
+                style={styles.reconciliationActionButton}
+                onPress={() => setReconciliationHistoryVisible(true)}
+                onPressIn={handlePressIn5}
+                onPressOut={handlePressOut5}
+                activeOpacity={0.8}>
+                <IconSymbol name="clock.arrow.circlepath" size={18} color="#00b09b" />
+                <Text style={styles.reconciliationActionText}>Histórico</Text>
+              </TouchableOpacity>
+            </Animated.View>
+            <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnim6 }] }}>
+              <TouchableOpacity
+                style={styles.reconciliationActionButton}
+                onPress={handleExportReport}
+                onPressIn={handlePressIn6}
+                onPressOut={handlePressOut6}
+                disabled={exportingReport}
+                activeOpacity={0.8}>
+                {exportingReport ? (
+                  <ActivityIndicator size="small" color="#00b09b" />
+                ) : (
+                  <IconSymbol name="square.and.arrow.up" size={18} color="#00b09b" />
+                )}
+                <Text style={styles.reconciliationActionText}>
+                  {exportingReport ? 'Exportando...' : 'Exportar'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </Animated.View>
+
         {/* Quick Actions */}
         <Animated.View 
           style={[
@@ -652,6 +937,20 @@ export default function DashboardScreen() {
           showSuccess('Transação criada com sucesso!', { transactionType });
         }}
         returnToHome={true}
+      />
+      <ReconciliationModal
+        visible={reconciliationVisible}
+        onClose={() => setReconciliationVisible(false)}
+        onSuccess={() => {
+          loadTransactions();
+        }}
+      />
+      <ReconciliationHistoryModal
+        visible={reconciliationHistoryVisible}
+        onClose={() => setReconciliationHistoryVisible(false)}
+        onUpdate={() => {
+          loadTransactions();
+        }}
       />
     </View>
   );
@@ -897,5 +1196,72 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.6)',
     textAlign: 'center',
+  },
+  reconciliationCard: {
+    padding: 16,
+    marginBottom: 12,
+  },
+  reconciliationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  reconciliationIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0, 176, 155, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  reconciliationTextContainer: {
+    flex: 1,
+  },
+  reconciliationTitle: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  reconciliationSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  reconciliationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#00b09b',
+  },
+  reconciliationButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  reconciliationActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  reconciliationActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 176, 155, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 176, 155, 0.3)',
+  },
+  reconciliationActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#00b09b',
   },
 });

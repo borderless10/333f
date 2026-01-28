@@ -175,18 +175,29 @@ export class PluggIntegrationService extends BankIntegrationService {
 export async function saveBankConnection(
   connection: Omit<BankConnection, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<BankConnection> {
-  const { data, error } = await supabase
-    .from('bank_connections')
-    .insert([connection])
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('bank_connections')
+      .insert([connection])
+      .select()
+      .single();
 
-  if (error) {
-    console.error('Erro ao salvar conexão bancária:', error);
+    if (error) {
+      // Se a tabela não existe, informar o usuário
+      if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('schema cache')) {
+        throw new Error('Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.');
+      }
+      console.error('Erro ao salvar conexão bancária:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error: any) {
+    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
+      throw new Error('Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.');
+    }
     throw error;
   }
-
-  return data;
 }
 
 /**
@@ -195,18 +206,32 @@ export async function saveBankConnection(
 export async function getUserBankConnections(
   userId: string
 ): Promise<BankConnection[]> {
-  const { data, error } = await supabase
-    .from('bank_connections')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('bank_connections')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Erro ao buscar conexões:', error);
+    if (error) {
+      // Se a tabela não existe, retornar array vazio em vez de lançar erro
+      if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('schema cache')) {
+        console.warn('Tabela bank_connections não encontrada. Execute o script SQL de setup.');
+        return [];
+      }
+      console.error('Erro ao buscar conexões:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error: any) {
+    // Tratamento adicional para erros de tabela não encontrada
+    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
+      console.warn('Tabela bank_connections não encontrada. Execute o script SQL de setup.');
+      return [];
+    }
     throw error;
   }
-
-  return data || [];
 }
 
 /**
@@ -215,18 +240,31 @@ export async function getUserBankConnections(
 export async function getBankConnection(
   connectionId: string
 ): Promise<BankConnection | null> {
-  const { data, error } = await supabase
-    .from('bank_connections')
-    .select('*')
-    .eq('id', connectionId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('bank_connections')
+      .select('*')
+      .eq('id', connectionId)
+      .single();
 
-  if (error) {
+    if (error) {
+      // Se a tabela não existe, retornar null em vez de lançar erro
+      if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('schema cache')) {
+        console.warn('Tabela bank_connections não encontrada.');
+        return null;
+      }
+      console.error('Erro ao buscar conexão:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error: any) {
+    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
+      return null;
+    }
     console.error('Erro ao buscar conexão:', error);
     return null;
   }
-
-  return data;
 }
 
 /**
@@ -236,19 +274,30 @@ export async function updateBankConnection(
   connectionId: string,
   updates: Partial<BankConnection>
 ): Promise<BankConnection> {
-  const { data, error } = await supabase
-    .from('bank_connections')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', connectionId)
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('bank_connections')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', connectionId)
+      .select()
+      .single();
 
-  if (error) {
-    console.error('Erro ao atualizar conexão:', error);
+    if (error) {
+      // Se a tabela não existe, informar o usuário
+      if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('schema cache')) {
+        throw new Error('Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.');
+      }
+      console.error('Erro ao atualizar conexão:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error: any) {
+    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
+      throw new Error('Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.');
+    }
     throw error;
   }
-
-  return data;
 }
 
 /**

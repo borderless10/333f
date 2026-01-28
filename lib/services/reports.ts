@@ -114,32 +114,42 @@ export async function generateReconciliationReport(
       return { data: null, error: errorTit };
     }
 
-    // Buscar conciliações (se a tabela existir)
-    // Por enquanto, vamos simular dados
-    const transacoesConciliadas = 0; // TODO: Buscar da tabela conciliacoes
-    const titulosConciliados = 0; // TODO: Buscar da tabela conciliacoes
+    // Buscar conciliações no período
+    const { data: reconciliations } = await supabase
+      .from('conciliacoes')
+      .select('transacao_id, titulo_id, diferenca_valor')
+      .in(
+        'transacao_id',
+        (transacoes || []).map((t) => t.id!).filter(Boolean)
+      );
+
+    const reconciledTxIds = new Set(reconciliations?.map((r) => r.transacao_id) || []);
+    const reconciledTitleIds = new Set(reconciliations?.map((r) => r.titulo_id) || []);
+
+    const transacoesConciliadas = reconciledTxIds.size;
+    const titulosConciliados = reconciledTitleIds.size;
 
     const totalTransacoes = transacoes?.length || 0;
     const totalTitulos = titulos?.length || 0;
 
-    // Calcular valores
-    const totalConciliado = 0; // TODO: Calcular baseado em conciliações
-    const totalNaoConciliado = 
+    // Calcular valores conciliados
+    const totalConciliado = (reconciliations || []).reduce((sum, r) => {
+      const tx = transacoes?.find((t) => t.id === r.transacao_id);
+      return sum + (tx?.valor || 0);
+    }, 0);
+
+    const totalNaoConciliado =
       (transacoes?.reduce((sum, t) => sum + t.valor, 0) || 0) +
       (titulos?.reduce((sum, t) => sum + t.valor, 0) || 0) -
-      totalConciliado;
+      totalConciliado * 2; // Multiplicar por 2 porque conta transação e título
 
-    const taxaConciliacao = totalTransacoes > 0 
-      ? (transacoesConciliadas / totalTransacoes) * 100 
-      : 0;
+    const taxaConciliacao =
+      totalTransacoes > 0 ? (transacoesConciliadas / totalTransacoes) * 100 : 0;
 
     // Sobras: transações sem título correspondente
     const sobras = (transacoes || [])
-      .filter(t => {
-        // TODO: Verificar se tem conciliação
-        return true; // Por enquanto, todas são sobras
-      })
-      .map(t => ({
+      .filter((t) => !reconciledTxIds.has(t.id!))
+      .map((t) => ({
         id: t.id!,
         descricao: t.descricao,
         valor: t.valor,
@@ -148,13 +158,10 @@ export async function generateReconciliationReport(
 
     // Faltas: títulos sem transação correspondente
     const faltas = (titulos || [])
-      .filter(t => {
-        // TODO: Verificar se tem conciliação
-        return true; // Por enquanto, todos são faltas
-      })
-      .map(t => ({
+      .filter((t) => !reconciledTitleIds.has(t.id!))
+      .map((t) => ({
         id: t.id!,
-        descricao: t.descricao || '',
+        descricao: t.descricao || t.fornecedor_cliente,
         valor: t.valor,
         data_vencimento: t.data_vencimento,
       }));

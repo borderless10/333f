@@ -15,12 +15,24 @@ export default function TabLayout() {
 
   useEffect(() => {
     // Animação de fade quando troca de aba
-    fadeAnim.setValue(0);
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    let animation: Animated.CompositeAnimation | null = null;
+    
+    fadeAnim.stopAnimation((value) => {
+      fadeAnim.setValue(0);
+      animation = Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      });
+      animation.start();
+    });
+
+    // Cleanup
+    return () => {
+      if (animation) {
+        animation.stop();
+      }
+    };
   }, [pathname]);
 
   return (
@@ -66,6 +78,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="bank-connections"
+        options={{
+          title: 'Conexões',
+          tabBarIcon: ({ color }) => <MaterialIcons name="link" size={28} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="companies"
         options={{
           title: 'Empresas',
@@ -91,7 +110,7 @@ export default function TabLayout() {
         name="user"
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ color }) => <MaterialIcons name="person" size={28} color={color} />,
+          tabBarIcon: ({ color }) => <MaterialIcons name="settings" size={28} color={color} />,
         }}
       />
     </Tabs>

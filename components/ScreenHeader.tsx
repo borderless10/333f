@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useMemo } from 'react';
+import { Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CompanySelector } from './CompanySelector';
 
@@ -25,66 +25,134 @@ export function ScreenHeader({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const isMountedRef = useRef(true);
+  const hasStartedRef = useRef(false);
 
   useEffect(() => {
-    // Animação de entrada suave
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [title]);
+    isMountedRef.current = true;
+    hasStartedRef.current = false;
+
+    // Parar animação anterior SEM callbacks
+    const stopPreviousAnimation = () => {
+      try {
+        if (animationRef.current) {
+          animationRef.current.stop();
+          animationRef.current = null;
+        }
+      } catch (error) {
+        // Ignorar erros silenciosamente
+      }
+    };
+
+    // Resetar valores diretamente
+    const resetValues = () => {
+      try {
+        if (isMountedRef.current) {
+          fadeAnim.setValue(0);
+          slideAnim.setValue(-20);
+          scaleAnim.setValue(0.95);
+        }
+      } catch (error) {
+        // Ignorar erros de imutabilidade
+      }
+    };
+
+    stopPreviousAnimation();
+    resetValues();
+
+    // Usar requestAnimationFrame para garantir estabilidade
+    const rafId = requestAnimationFrame(() => {
+      if (!isMountedRef.current || hasStartedRef.current) return;
+
+      const timeoutId = setTimeout(() => {
+        if (!isMountedRef.current || hasStartedRef.current) return;
+        hasStartedRef.current = true;
+
+        try {
+          animationRef.current = Animated.parallel([
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+            Animated.spring(slideAnim, {
+              toValue: 0,
+              tension: 50,
+              friction: 7,
+              useNativeDriver: true,
+            }),
+            Animated.spring(scaleAnim, {
+              toValue: 1,
+              tension: 50,
+              friction: 7,
+              useNativeDriver: true,
+            }),
+          ]);
+
+          animationRef.current.start();
+        } catch (error) {
+          hasStartedRef.current = false;
+        }
+      }, Platform.OS === 'android' ? 100 : 50);
+
+      return () => {
+        clearTimeout(timeoutId);
+      };
+    });
+
+    return () => {
+      isMountedRef.current = false;
+      hasStartedRef.current = false;
+      cancelAnimationFrame(rafId);
+
+      try {
+        if (animationRef.current) {
+          animationRef.current.stop();
+          animationRef.current = null;
+        }
+      } catch (error) {
+        // Ignorar erros durante cleanup
+      }
+    };
+  }, [title, fadeAnim, slideAnim, scaleAnim]);
+
+  // Usar useMemo para estabilizar objetos de estilo
+  const headerStyle = useMemo(() => ({
+    paddingTop: insets.top + 16,
+    opacity: fadeAnim,
+    transform: [
+      { translateY: slideAnim },
+      { scale: scaleAnim },
+    ],
+  }), [insets.top, fadeAnim, slideAnim, scaleAnim]);
+
+  const titleStyle = useMemo(() => ({
+    opacity: fadeAnim,
+    transform: [{ translateX: slideAnim }],
+  }), [fadeAnim, slideAnim]);
+
+  const subtitleStyle = useMemo(() => ({
+    opacity: fadeAnim,
+    transform: [{ translateX: slideAnim }],
+  }), [fadeAnim, slideAnim]);
+
+  const actionsStyle = useMemo(() => ({
+    opacity: fadeAnim,
+    transform: [{ translateX: Animated.multiply(slideAnim, -1) }],
+  }), [fadeAnim, slideAnim]);
 
   return (
-    <Animated.View
-      style={[
-        styles.header,
-        {
-          paddingTop: insets.top + 16,
-          opacity: fadeAnim,
-          transform: [
-            { translateY: slideAnim },
-            { scale: scaleAnim },
-          ],
-        },
-      ]}>
+    <Animated.View style={[styles.header, headerStyle]}>
       <View style={styles.headerContent}>
         <View style={styles.headerTextContainer}>
-          <Animated.View
-            style={[
-              {
-                opacity: fadeAnim,
-                transform: [{ translateX: slideAnim }],
-              },
-              styles.titleContainer,
-            ]}>
+          <Animated.View style={[titleStyle, styles.titleContainer]}>
             <Text style={styles.title} numberOfLines={2}>
               {title}
             </Text>
           </Animated.View>
           {subtitle && (
-            <Animated.View
-              style={[
-                {
-                  opacity: fadeAnim,
-                  transform: [{ translateX: slideAnim }],
-                },
-                styles.subtitleContainer,
-              ]}>
+            <Animated.View style={[subtitleStyle, styles.subtitleContainer]}>
               <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">
                 {subtitle}
               </Text>
@@ -92,14 +160,7 @@ export function ScreenHeader({
           )}
         </View>
 
-        <Animated.View
-          style={[
-            styles.headerActions,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateX: Animated.multiply(slideAnim, -1) }],
-            },
-          ]}>
+        <Animated.View style={[styles.headerActions, actionsStyle]}>
           {rightAction && rightAction.visible !== false && (
             <TouchableOpacity
               style={styles.actionButton}
