@@ -17,7 +17,6 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/hooks/use-notification';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
-import { useScreenAnimations } from '@/hooks/use-screen-animations';
 import {
   getUserConnections,
   renewConsent,
@@ -41,7 +40,6 @@ export default function BankConnectionsScreen() {
   const { userId } = useAuth();
   const { showSuccess, showError, showWarning } = useNotification();
   const scrollRef = useScrollToTop();
-  const { animatedStyle: headerStyle } = useScreenAnimations(0);
 
   const [connections, setConnections] = useState<OpenFinanceConnection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -347,7 +345,7 @@ export default function BankConnectionsScreen() {
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>
-        <View style={headerStyle}>
+        <View>
           <ScreenHeader
             title="Conexões Open Finance"
             subtitle={`${connections.length} conexão${connections.length !== 1 ? 'ões' : ''} cadastrada${connections.length !== 1 ? 's' : ''}`}

@@ -12,7 +12,6 @@ export function useScreenAnimations(delay: number = 0) {
   // CRÍTICO: Inicializar com 0 para evitar erro no Android/Fabric
   // O valor inicial numérico pode causar problemas quando renderizado antes da animação
   const slideAnim = useRef(new Animated.Value(0)).current;
-  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
   const isMountedRef = useRef(true);
   const hasStartedRef = useRef(false);
 
@@ -20,34 +19,13 @@ export function useScreenAnimations(delay: number = 0) {
     isMountedRef.current = true;
     hasStartedRef.current = false;
 
-    // Parar animação anterior SEM callbacks para evitar problemas de propriedades somente leitura
-    const stopPreviousAnimation = () => {
-      try {
-        if (animationRef.current) {
-          animationRef.current.stop();
-          animationRef.current = null;
-        }
-      } catch (error) {
-        // Ignorar erros silenciosamente - objeto pode já estar congelado
+    // Resetar valores diretamente
+    try {
+      if (isMountedRef.current) {
+        fadeAnim.setValue(0);
+        slideAnim.setValue(30);
       }
-    };
-
-    // Resetar valores diretamente - sem callbacks que podem causar problemas
-    const resetValues = () => {
-      try {
-        if (isMountedRef.current) {
-          fadeAnim.setValue(0);
-          // Resetar para 30 para iniciar a animação de slide
-          slideAnim.setValue(30);
-        }
-      } catch (error) {
-        // Ignorar erros de imutabilidade - pode acontecer durante cleanup
-      }
-    };
-
-    // Parar e resetar
-    stopPreviousAnimation();
-    resetValues();
+    } catch (_) {}
 
     // Usar requestAnimationFrame para garantir que o reset foi aplicado antes de iniciar nova animação
     const rafId = requestAnimationFrame(() => {
@@ -74,10 +52,8 @@ export function useScreenAnimations(delay: number = 0) {
             useNativeDriver: true,
           });
 
-          animationRef.current = Animated.parallel([fadeAnimation, slideAnimation]);
-          
-          // Iniciar SEM callback para evitar problemas com propriedades somente leitura
-          animationRef.current.start();
+          // Não guardar ref na animação (evita erro read-only __private_62_onEnd ao parar/finalizar)
+          Animated.parallel([fadeAnimation, slideAnimation]).start();
         } catch (error) {
           // Ignorar erros silenciosamente
           hasStartedRef.current = false;
@@ -96,16 +72,6 @@ export function useScreenAnimations(delay: number = 0) {
       
       // Cancelar requestAnimationFrame se ainda não executou
       cancelAnimationFrame(rafId);
-
-      // Parar animação SEM callbacks
-      try {
-        if (animationRef.current) {
-          animationRef.current.stop();
-          animationRef.current = null;
-        }
-      } catch (error) {
-        // Ignorar erros durante cleanup - objeto pode já estar congelado
-      }
     };
   }, [delay, fadeAnim, slideAnim]);
 
