@@ -22,10 +22,11 @@ import { useNotification } from '@/hooks/use-notification';
 import {
   createOpenFinanceConnection,
   AVAILABLE_BANKS,
-  type OpenFinanceConnection,
 } from '@/lib/services/open-finance';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
+import { getPluggyConnectToken, getPluggyConnectUrl } from '@/lib/services/pluggy';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 
 interface NewConnectionModalProps {
   visible: boolean;
@@ -62,76 +63,63 @@ export function NewConnectionModal({ visible, onClose, onSuccess }: NewConnectio
   };
 
   const handleCreateConnection = async () => {
-    if (!userId || !selectedBank) {
-      showError('Selecione um banco para continuar');
+    if (!userId) {
+      showError('Faça login para continuar');
       return;
     }
 
-    const bank = AVAILABLE_BANKS.find((b) => b.code === selectedBank);
-    if (!bank) {
+    // Pluggy: não exige banco pré-selecionado (a Pluggy mostra a lista)
+    const bank = selectedBank ? AVAILABLE_BANKS.find((b) => b.code === selectedBank) : null;
+    if (provider !== 'plugg' && !selectedBank) {
+      showError('Selecione um banco para continuar');
+      return;
+    }
+    if (provider !== 'plugg' && !bank) {
       showError('Banco inválido');
       return;
     }
 
-    if (loading) return; // Prevenir múltiplas chamadas
-
+    if (loading) return;
     setLoading(true);
 
     try {
-      // Criar conexão pendente
+      // Fluxo Pluggy: obter Connect Token e abrir Pluggy Connect
+      if (provider === 'plugg') {
+        const connectToken = await getPluggyConnectToken(userId);
+        const pluggyUrl = getPluggyConnectUrl(connectToken);
+        setLoading(false);
+        handleClose();
+        onSuccess?.();
+        await WebBrowser.openBrowserAsync(pluggyUrl, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+        });
+        showSuccess('Conclua a conexão na tela da Pluggy. Depois volte ao app.', { iconType: 'link' });
+        return;
+      }
+
+      // Fluxo outros provedores: criar conexão pendente e simular
       const connection = await createOpenFinanceConnection(userId, {
         conta_bancaria_id: selectedConta || undefined,
-        bank_code: selectedBank,
-        bank_name: bank.name,
+        bank_code: selectedBank!,
+        bank_name: bank!.name,
         account_number: selectedConta ? contas.find((c) => c.id === selectedConta)?.numero_conta || '' : '',
         account_type: accountType,
         provider,
       });
 
-      // Resetar loading antes de mostrar alert
       setLoading(false);
 
-      // Aqui você integraria com a API real do provedor
-      // Por enquanto, vamos simular o fluxo
-      
-      // Para Open Banking real, você precisaria:
-      // 1. Chamar API do provedor para obter URL de autorização
-      // 2. Abrir URL no navegador
-      // 3. Processar callback quando usuário autorizar
-
-      // Exemplo de fluxo simulado:
       Alert.alert(
         'Conectar Conta',
-        `Para conectar sua conta do ${bank.name}, você será redirecionado para autorizar o acesso.`,
+        `Para conectar sua conta do ${bank!.name}, você será redirecionado para autorizar o acesso.`,
         [
-          { 
-            text: 'Cancelar', 
-            style: 'cancel',
-            onPress: () => {
-              // Não fazer nada, apenas fechar alert
-            }
-          },
+          { text: 'Cancelar', style: 'cancel' },
           {
             text: 'Continuar',
             onPress: () => {
-              // TODO: Implementar abertura de URL de autorização
-              // const authUrl = await getAuthUrl(connection.id);
-              // await Linking.openURL(authUrl);
-              
-              // Mostrar notificação de sucesso
-              showSuccess(`Conta ${bank.name} conectada com sucesso!`, {
-                iconType: 'link',
-              });
-              
-              // Fechar modal primeiro
+              showSuccess(`Conta ${bank!.name} conectada com sucesso!`, { iconType: 'link' });
               handleClose();
-              
-              // Navegar para tela de conexões após um pequeno delay
-              setTimeout(() => {
-                router.push('/(tabs)/bank-connections');
-              }, 300);
-              
-              // Chamar callback de sucesso
+              setTimeout(() => router.push('/(tabs)/bank-connections'), 300);
               onSuccess?.();
             },
           },
@@ -141,7 +129,6 @@ export function NewConnectionModal({ visible, onClose, onSuccess }: NewConnectio
     } catch (error: any) {
       console.error('Erro ao criar conexão:', error);
       setLoading(false);
-      // Verificar se é erro de tabela não encontrada
       if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache') || error?.message?.includes('Tabela de conexões')) {
         showError('Tabela de conexões não encontrada. Execute o script SQL de setup no Supabase.');
       } else {
@@ -198,7 +185,7 @@ export function NewConnectionModal({ visible, onClose, onSuccess }: NewConnectio
                     onPress={() => setProvider('plugg')}
                     activeOpacity={0.7}>
                     <Text style={[styles.providerButtonText, provider === 'plugg' && styles.providerButtonTextActive]}>
-                      Plugg.to
+                      Pluggy
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity

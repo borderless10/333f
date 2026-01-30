@@ -398,7 +398,7 @@ export default function BankConnectionsScreen() {
                       </ThemedText>
                       <ThemedText style={styles.connectionProvider}>
                         Provedor: {connection.provider === 'open_banking' ? 'Open Banking' :
-                                   connection.provider === 'plugg' ? 'Plugg.to' : 'Belvo'}
+                                   connection.provider === 'plugg' ? 'Pluggy' : 'Belvo'}
                       </ThemedText>
                     </View>
                     <View
