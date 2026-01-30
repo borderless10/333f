@@ -1,5 +1,8 @@
 // Supabase Edge Function: cria um Connect Token da Pluggy
 // Configure os secrets no Supabase: PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET
+// Retorna redirectUrl (URL curta) para evitar truncamento da URL no app (Intent/Android)
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const PLUGGY_AUTH_URL = 'https://api.pluggy.ai/auth';
 const PLUGGY_CONNECT_TOKEN_URL = 'https://api.pluggy.ai/connect_token';
@@ -10,7 +13,6 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -29,7 +31,6 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const clientUserId = (body?.userId ?? body?.clientUserId ?? '') as string;
 
-    // 1. Obter API Key da Pluggy
     const authRes = await fetch(PLUGGY_AUTH_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -55,7 +56,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Criar Connect Token
     const connectBody: Record<string, unknown> = {};
     if (clientUserId) connectBody.clientUserId = clientUserId;
 
@@ -87,8 +87,23 @@ Deno.serve(async (req) => {
       );
     }
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    const { data: row, error: insertError } = await supabase
+      .from('pluggy_redirect_tokens')
+      .insert({ token: connectToken })
+      .select('id')
+      .single();
+
+    let redirectUrl: string | null = null;
+    if (!insertError && row?.id) {
+      redirectUrl = `${supabaseUrl}/functions/v1/pluggy-redirect/${row.id}`;
+    }
+
     return new Response(
-      JSON.stringify({ connectToken }),
+      JSON.stringify({ connectToken, redirectUrl }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (e) {

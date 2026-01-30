@@ -41,31 +41,43 @@ export function useNotification() {
   const showError = useCallback((message: string, options?: NotificationOptions) => {
     Toast.show({
       type: 'error',
-      text1: options?.title || undefined, // Não mostrar título padrão se não fornecido
+      text1: options?.title || undefined,
       text2: message,
       visibilityTime: options?.duration || 4000,
       onPress: options?.onPress,
-    });
+      props: {
+        iconType: options?.iconType,
+        customIcon: options?.icon,
+      },
+    } as any);
   }, []);
 
   const showWarning = useCallback((message: string, options?: NotificationOptions) => {
     Toast.show({
       type: 'warning',
-      text1: options?.title || undefined, // Não mostrar título padrão se não fornecido
+      text1: options?.title || undefined,
       text2: message,
       visibilityTime: options?.duration || 3500,
       onPress: options?.onPress,
-    });
+      props: {
+        iconType: options?.iconType,
+        customIcon: options?.icon,
+      },
+    } as any);
   }, []);
 
   const showInfo = useCallback((message: string, options?: NotificationOptions) => {
     Toast.show({
       type: 'info',
-      text1: options?.title || undefined, // Não mostrar título padrão se não fornecido
+      text1: options?.title || undefined,
       text2: message,
       visibilityTime: options?.duration || 3000,
       onPress: options?.onPress,
-    });
+      props: {
+        iconType: options?.iconType,
+        customIcon: options?.icon,
+      },
+    } as any);
   }, []);
 
   return {

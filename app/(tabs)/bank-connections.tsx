@@ -103,9 +103,9 @@ export default function BankConnectionsScreen() {
       
       // Verificar se é erro de tabela não encontrada
       if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
-        showError('Tabela de conexões não encontrada. Execute o script SQL de setup no Supabase.');
+        showError('Tabela de conexões não encontrada. Execute o script SQL de setup no Supabase.', { iconType: 'link' });
       } else {
-        showError(error?.message || 'Não foi possível carregar as conexões');
+        showError(error?.message || 'Não foi possível carregar as conexões', { iconType: 'link' });
       }
       
       if (userId) {
@@ -156,6 +156,7 @@ export default function BankConnectionsScreen() {
               
               showSuccess(`Consentimento renovado para ${connection.bank_name}`, {
                 iconType: 'link',
+                title: 'Consentimento renovado',
               });
               
               // Aguardar um pouco antes de recarregar para evitar race conditions
@@ -166,7 +167,7 @@ export default function BankConnectionsScreen() {
               }, 500);
             } catch (error: any) {
               console.error('Erro ao renovar consentimento:', error);
-              showError(error.message || 'Não foi possível renovar o consentimento');
+              showError(error.message || 'Não foi possível renovar o consentimento', { iconType: 'link' });
             } finally {
               setRenewing(null);
             }
@@ -199,6 +200,7 @@ export default function BankConnectionsScreen() {
               
               showSuccess(`Consentimento revogado para ${connection.bank_name}`, {
                 iconType: 'link',
+                title: 'Consentimento revogado',
               });
               
               // Aguardar um pouco antes de recarregar para evitar race conditions
@@ -209,7 +211,7 @@ export default function BankConnectionsScreen() {
               }, 500);
             } catch (error: any) {
               console.error('Erro ao revogar consentimento:', error);
-              showError(error.message || 'Não foi possível revogar o consentimento');
+              showError(error.message || 'Não foi possível revogar o consentimento', { iconType: 'link' });
             }
           },
         },
@@ -251,15 +253,17 @@ export default function BankConnectionsScreen() {
         connection.conta_bancaria_id || undefined
       );
 
-      showSuccess(`${result.imported} transações importadas com sucesso!`);
-      // Aguardar um pouco antes de recarregar para evitar race conditions
+      showSuccess(`${result.imported} transações importadas com sucesso!`, {
+        iconType: 'export',
+        title: 'Transações importadas',
+      });
       setTimeout(() => {
         if (userId) {
           loadConnections();
         }
       }, 500);
     } catch (error: any) {
-      showError(error.message || 'Não foi possível importar transações');
+      showError(error.message || 'Não foi possível importar transações', { iconType: 'link' });
     } finally {
       setImporting(null);
     }
@@ -281,15 +285,17 @@ export default function BankConnectionsScreen() {
         connection.conta_bancaria_id || undefined
       );
 
-      showSuccess('Saldo importado com sucesso!');
-      // Aguardar um pouco antes de recarregar para evitar race conditions
+      showSuccess('Saldo importado com sucesso!', {
+        iconType: 'account',
+        title: 'Saldo importado',
+      });
       setTimeout(() => {
         if (userId) {
           loadConnections();
         }
       }, 500);
     } catch (error: any) {
-      showError(error.message || 'Não foi possível importar saldo');
+      showError(error.message || 'Não foi possível importar saldo', { iconType: 'link' });
     } finally {
       setImporting(null);
     }
@@ -345,7 +351,7 @@ export default function BankConnectionsScreen() {
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}>
-        <View>
+        <View style={styles.headerWrapper}>
           <ScreenHeader
             title="Conexões Open Finance"
             subtitle={`${connections.length} conexão${connections.length !== 1 ? 'ões' : ''} cadastrada${connections.length !== 1 ? 's' : ''}`}
@@ -358,7 +364,7 @@ export default function BankConnectionsScreen() {
         </View>
 
         {connections.length === 0 ? (
-          <GlassContainer style={styles.emptyState}>
+          <GlassContainer style={[styles.emptyState, styles.centeredBlock]}>
             <IconSymbol name="link.circle" size={48} color="rgba(255, 255, 255, 0.5)" />
             <ThemedText style={styles.emptyStateText}>
               Nenhuma conexão cadastrada
@@ -374,7 +380,7 @@ export default function BankConnectionsScreen() {
             </TouchableOpacity>
           </GlassContainer>
         ) : (
-          <View style={styles.connectionsList}>
+          <View style={[styles.connectionsList, styles.centeredBlock]}>
             {connections.map((connection) => {
               const bank = getBankByCode(connection.bank_code);
               const expired = isTokenExpired(connection.expires_at);
@@ -395,8 +401,7 @@ export default function BankConnectionsScreen() {
                          connection.account_type === 'savings' ? 'Poupança' : 'Investimento'}
                       </ThemedText>
                       <ThemedText style={styles.connectionProvider}>
-                        Provedor: {connection.provider === 'open_banking' ? 'Open Banking' :
-                                   connection.provider === 'plugg' ? 'Pluggy' : 'Belvo'}
+                        Provedor: Pluggy
                       </ThemedText>
                     </View>
                     <View
@@ -495,6 +500,8 @@ export default function BankConnectionsScreen() {
                         Ver Logs
                       </Text>
                     </TouchableOpacity>
+                  </View>
+                  <View style={styles.revokeRow}>
                     <TouchableOpacity
                       style={[styles.actionButton, styles.actionButtonDanger]}
                       onPress={() => handleRevokeConsent(connection)}
@@ -547,6 +554,15 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+    alignItems: 'center',
+  },
+  headerWrapper: {
+    alignSelf: 'stretch',
+  },
+  centeredBlock: {
+    alignSelf: 'center',
+    maxWidth: 480,
+    width: '100%',
   },
   loadingContainer: {
     flex: 1,
@@ -672,6 +688,12 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  revokeRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
   },
   actionButton: {
     flexDirection: 'row',

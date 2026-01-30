@@ -6,11 +6,17 @@
 const getSupabaseUrl = () =>
   process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 
+export interface PluggyConnectResult {
+  connectToken: string;
+  /** URL curta que redireciona para o Pluggy Connect (evita truncamento no Android) */
+  redirectUrl?: string | null;
+}
+
 /**
- * Obtém um Connect Token da Pluggy via Edge Function do Supabase.
- * Requer que a função pluggy-connect-token esteja publicada e com secrets configurados.
+ * Obtém Connect Token (e opcionalmente redirectUrl) via Edge Function do Supabase.
+ * Use redirectUrl para abrir no navegador: evita truncamento da URL longa no Intent/Android.
  */
-export async function getPluggyConnectToken(userId: string): Promise<string> {
+export async function getPluggyConnectToken(userId: string): Promise<PluggyConnectResult> {
   const baseUrl = getSupabaseUrl();
   if (!baseUrl) {
     throw new Error('EXPO_PUBLIC_SUPABASE_URL não configurada.');
@@ -34,12 +40,14 @@ export async function getPluggyConnectToken(userId: string): Promise<string> {
   }
 
   const data = await res.json();
-  const connectToken = data?.connectToken;
-  if (!connectToken) {
-    throw new Error('Resposta da função sem connectToken.');
+  const connectToken = (data?.connectToken ?? data?.accessToken ?? data?.token ?? '').trim();
+  if (!connectToken || connectToken.length < 10) {
+    const msg = data?.error || data?.message || 'Resposta da função sem connectToken.';
+    throw new Error(typeof msg === 'string' ? msg : 'Resposta da função sem connectToken.');
   }
 
-  return connectToken;
+  const redirectUrl = (data?.redirectUrl ?? '').trim() || null;
+  return { connectToken, redirectUrl: redirectUrl || null };
 }
 
 /**
@@ -51,8 +59,9 @@ export const PLUGGY_CONNECT_BASE_URL = 'https://connect.pluggy.ai';
 
 /**
  * Monta a URL do Pluggy Connect com o connectToken (para abrir em WebView ou browser).
- * Se a Pluggy usar outro formato, ajuste conforme a documentação oficial.
+ * Inclui token na query e no hash para compatibilidade com a página da Pluggy.
  */
 export function getPluggyConnectUrl(connectToken: string): string {
-  return `${PLUGGY_CONNECT_BASE_URL}?connectToken=${encodeURIComponent(connectToken)}`;
+  const encoded = encodeURIComponent(connectToken);
+  return `${PLUGGY_CONNECT_BASE_URL}?connectToken=${encoded}&token=${encoded}#connectToken=${encoded}`;
 }

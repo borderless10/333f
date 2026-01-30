@@ -1,0 +1,63 @@
+diff --git a/node_modules/metro/src/Server.js b/node_modules/metro/src/Server.js
+index 6adc6d1..a417920 100644
+--- a/node_modules/metro/src/Server.js
++++ b/node_modules/metro/src/Server.js
+@@ -1,5 +1,16 @@
+ "use strict";
+ 
++if (typeof URL.canParse !== "function") {
++  URL.canParse = function (url, base) {
++    try {
++      new URL(url, base);
++      return true;
++    } catch {
++      return false;
++    }
++  };
++}
++
+ Object.defineProperty(exports, "__esModule", {
+   value: true,
+ });
+diff --git a/node_modules/metro/src/index.js b/node_modules/metro/src/index.js
+index 20bbf10..cbbe499 100644
+--- a/node_modules/metro/src/index.js
++++ b/node_modules/metro/src/index.js
+@@ -1,5 +1,16 @@
+ "use strict";
+ 
++if (typeof URL !== "undefined" && typeof URL.canParse !== "function") {
++  URL.canParse = function (url, base) {
++    try {
++      new URL(url, base);
++      return true;
++    } catch {
++      return false;
++    }
++  };
++}
++
+ try {
+   require("metro-babel-register").unstable_registerForMetroMonorepo();
+ } catch {}
+diff --git a/node_modules/metro/src/lib/parseBundleOptionsFromBundleRequestUrl.js b/node_modules/metro/src/lib/parseBundleOptionsFromBundleRequestUrl.js
+index fa4a967..6aedc1b 100644
+--- a/node_modules/metro/src/lib/parseBundleOptionsFromBundleRequestUrl.js
++++ b/node_modules/metro/src/lib/parseBundleOptionsFromBundleRequestUrl.js
+@@ -47,6 +47,16 @@ const debug = require("debug")(
+ );
+ const TRUE_STRINGS = new Set(["true", "1"]);
+ const RESOLVE_BASE_URL = "resolve://";
++if (typeof URL.canParse !== "function") {
++  URL.canParse = function (url, base) {
++    try {
++      new URL(url, base);
++      return true;
++    } catch {
++      return false;
++    }
++  };
++}
+ const getBoolQueryParam = (searchParams, opt, defaultValue) =>
+   searchParams.has(opt)
+     ? TRUE_STRINGS.has(searchParams.get(opt) || "")

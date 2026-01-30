@@ -40,6 +40,7 @@ export interface OpenFinanceConnection {
   expires_at?: string | null;
   status: 'active' | 'expired' | 'error' | 'pending';
   last_sync_at?: string | null;
+  pluggy_item_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -215,16 +216,19 @@ export async function createOpenFinanceConnection(
     access_token?: string;
     refresh_token?: string;
     expires_at?: string;
+    pluggy_item_id?: string;
+    status?: 'active' | 'pending' | 'expired' | 'error';
   }
 ): Promise<OpenFinanceConnection> {
   try {
+    const status = connectionData.status ?? (connectionData.pluggy_item_id ? 'active' : 'pending');
     const { data, error } = await supabase
       .from('bank_connections')
       .insert([
         {
           user_id: userId,
           ...connectionData,
-          status: 'pending',
+          status,
         },
       ])
       .select()

@@ -1,32 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNotification } from '@/hooks/use-notification';
+import { createOpenFinanceConnection } from '@/lib/services/open-finance';
+import { getPluggyConnectToken } from '@/lib/services/pluggy';
+import { router } from 'expo-router';
+import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { AnimatedBackground } from './animated-background';
-import { GlassContainer } from './glass-container';
+import { PluggyConnectModal } from './pluggy-connect-modal';
 import { ThemedText } from './themed-text';
-import { IconSymbol } from './ui/icon-symbol';
 import { Button } from './ui/button';
-import { useAuth } from '@/contexts/AuthContext';
-import { useNotification } from '@/hooks/use-notification';
-import {
-  createOpenFinanceConnection,
-  AVAILABLE_BANKS,
-} from '@/lib/services/open-finance';
-import { buscarContas, type ContaBancaria } from '@/lib/contas';
-import { getPluggyConnectToken, getPluggyConnectUrl } from '@/lib/services/pluggy';
-import * as Linking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
+import { IconSymbol } from './ui/icon-symbol';
 
 interface NewConnectionModalProps {
   visible: boolean;
@@ -40,112 +30,70 @@ export function NewConnectionModal({ visible, onClose, onSuccess }: NewConnectio
   const { showSuccess, showError } = useNotification();
 
   const [loading, setLoading] = useState(false);
-  const [contas, setContas] = useState<ContaBancaria[]>([]);
-  const [selectedBank, setSelectedBank] = useState<number | null>(null);
-  const [selectedConta, setSelectedConta] = useState<number | null>(null);
-  const [accountType, setAccountType] = useState<'checking' | 'savings' | 'investment'>('checking');
-  const [provider, setProvider] = useState<'open_banking' | 'plugg' | 'belvo'>('open_banking');
-
-  useEffect(() => {
-    if (visible && userId) {
-      loadAccounts();
-    }
-  }, [visible, userId]);
-
-  const loadAccounts = async () => {
-    if (!userId) return;
-    try {
-      const accounts = await buscarContas(userId);
-      setContas(accounts || []);
-    } catch (error) {
-      console.error('Erro ao carregar contas:', error);
-    }
-  };
+  const [pluggyConnectToken, setPluggyConnectToken] = useState<string | null>(null);
+  const [showPluggyWidget, setShowPluggyWidget] = useState(false);
 
   const handleCreateConnection = async () => {
     if (!userId) {
-      showError('Faça login para continuar');
+      showError('Faça login para continuar', { iconType: 'link' });
       return;
     }
-
-    // Pluggy: não exige banco pré-selecionado (a Pluggy mostra a lista)
-    const bank = selectedBank ? AVAILABLE_BANKS.find((b) => b.code === selectedBank) : null;
-    if (provider !== 'plugg' && !selectedBank) {
-      showError('Selecione um banco para continuar');
-      return;
-    }
-    if (provider !== 'plugg' && !bank) {
-      showError('Banco inválido');
-      return;
-    }
-
     if (loading) return;
     setLoading(true);
-
     try {
-      // Fluxo Pluggy: obter Connect Token e abrir Pluggy Connect
-      if (provider === 'plugg') {
-        const connectToken = await getPluggyConnectToken(userId);
-        const pluggyUrl = getPluggyConnectUrl(connectToken);
+      const result = await getPluggyConnectToken(userId);
+      const { connectToken } = result;
+      if (!connectToken || connectToken.length < 10) {
+        showError('Não foi possível obter o token da Pluggy. Tente de novo.', { iconType: 'link' });
         setLoading(false);
-        handleClose();
-        onSuccess?.();
-        await WebBrowser.openBrowserAsync(pluggyUrl, {
-          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-        });
-        showSuccess('Conclua a conexão na tela da Pluggy. Depois volte ao app.', { iconType: 'link' });
         return;
       }
-
-      // Fluxo outros provedores: criar conexão pendente e simular
-      const connection = await createOpenFinanceConnection(userId, {
-        conta_bancaria_id: selectedConta || undefined,
-        bank_code: selectedBank!,
-        bank_name: bank!.name,
-        account_number: selectedConta ? contas.find((c) => c.id === selectedConta)?.numero_conta || '' : '',
-        account_type: accountType,
-        provider,
-      });
-
       setLoading(false);
-
-      Alert.alert(
-        'Conectar Conta',
-        `Para conectar sua conta do ${bank!.name}, você será redirecionado para autorizar o acesso.`,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Continuar',
-            onPress: () => {
-              showSuccess(`Conta ${bank!.name} conectada com sucesso!`, { iconType: 'link' });
-              handleClose();
-              setTimeout(() => router.push('/(tabs)/bank-connections'), 300);
-              onSuccess?.();
-            },
-          },
-        ],
-        { cancelable: true }
-      );
+      handleClose();
+      setPluggyConnectToken(connectToken);
+      setShowPluggyWidget(true);
     } catch (error: any) {
       console.error('Erro ao criar conexão:', error);
       setLoading(false);
       if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache') || error?.message?.includes('Tabela de conexões')) {
-        showError('Tabela de conexões não encontrada. Execute o script SQL de setup no Supabase.');
+        showError('Tabela de conexões não encontrada. Execute o script SQL de setup no Supabase.', { iconType: 'link' });
       } else {
-        showError(error?.message || 'Não foi possível criar a conexão');
+        showError(error?.message || 'Não foi possível criar a conexão', { iconType: 'link' });
       }
     }
   };
 
   const handleClose = () => {
-    setSelectedBank(null);
-    setSelectedConta(null);
-    setAccountType('checking');
-    setProvider('open_banking');
     onClose();
   };
 
+  const handlePluggyClose = () => {
+    setShowPluggyWidget(false);
+    setPluggyConnectToken(null);
+  };
+
+  const handlePluggySuccess = async (data: { itemId: string; connectorName: string; connectorId: number }) => {
+    if (!userId) return;
+    try {
+      await createOpenFinanceConnection(userId, {
+        bank_code: data.connectorId,
+        bank_name: data.connectorName,
+        account_number: '',
+        account_type: 'checking',
+        provider: 'plugg',
+        pluggy_item_id: data.itemId,
+      });
+      handlePluggyClose();
+      showSuccess('Conta conectada com sucesso!', { iconType: 'link' });
+      onSuccess?.();
+      setTimeout(() => router.push('/(tabs)/bank-connections'), 300);
+    } catch (err: any) {
+      showError(err?.message ?? 'Não foi possível salvar a conexão.', { iconType: 'link' });
+    }
+  };
+
   return (
+    <>
     <Modal
       visible={visible}
       animationType="slide"
@@ -168,139 +116,15 @@ export function NewConnectionModal({ visible, onClose, onSuccess }: NewConnectio
             </View>
 
             <View style={styles.formContainer}>
-              {/* Provedor */}
-              <View style={styles.inputGroup}>
-                <ThemedText style={styles.inputLabel}>Provedor *</ThemedText>
-                <View style={styles.providerButtons}>
-                  <TouchableOpacity
-                    style={[styles.providerButton, provider === 'open_banking' && styles.providerButtonActive]}
-                    onPress={() => setProvider('open_banking')}
-                    activeOpacity={0.7}>
-                    <Text style={[styles.providerButtonText, provider === 'open_banking' && styles.providerButtonTextActive]}>
-                      Open Banking
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.providerButton, provider === 'plugg' && styles.providerButtonActive]}
-                    onPress={() => setProvider('plugg')}
-                    activeOpacity={0.7}>
-                    <Text style={[styles.providerButtonText, provider === 'plugg' && styles.providerButtonTextActive]}>
-                      Pluggy
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.providerButton, provider === 'belvo' && styles.providerButtonActive]}
-                    onPress={() => setProvider('belvo')}
-                    activeOpacity={0.7}>
-                    <Text style={[styles.providerButtonText, provider === 'belvo' && styles.providerButtonTextActive]}>
-                      Belvo
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Banco */}
-              <View style={styles.inputGroup}>
-                <ThemedText style={styles.inputLabel}>Banco *</ThemedText>
-                <ScrollView style={styles.banksList} nestedScrollEnabled>
-                  {AVAILABLE_BANKS.map((bank) => (
-                    <TouchableOpacity
-                      key={bank.code}
-                      style={[
-                        styles.bankOption,
-                        selectedBank === bank.code && styles.bankOptionActive,
-                      ]}
-                      onPress={() => setSelectedBank(bank.code)}
-                      activeOpacity={0.7}>
-                      <View style={styles.bankOptionContent}>
-                        <IconSymbol
-                          name="building.columns.fill"
-                          size={20}
-                          color={selectedBank === bank.code ? '#00b09b' : 'rgba(255, 255, 255, 0.7)'}
-                        />
-                        <Text
-                          style={[
-                            styles.bankOptionText,
-                            selectedBank === bank.code && styles.bankOptionTextActive,
-                          ]}>
-                          {bank.name} ({bank.code})
-                        </Text>
-                      </View>
-                      {selectedBank === bank.code && (
-                        <IconSymbol name="checkmark.circle.fill" size={20} color="#00b09b" />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Conta Bancária (opcional) */}
-              {contas.length > 0 && (
-                <View style={styles.inputGroup}>
-                  <ThemedText style={styles.inputLabel}>Conta Bancária (opcional)</ThemedText>
-                  <View style={styles.pickerContainer}>
-                    <TouchableOpacity
-                      style={styles.pickerButton}
-                      onPress={() => {
-                        if (selectedConta === null) {
-                          setSelectedConta(contas[0]?.id || null);
-                        } else {
-                          const currentIndex = contas.findIndex((c) => c.id === selectedConta);
-                          if (currentIndex === contas.length - 1) {
-                            setSelectedConta(null);
-                          } else {
-                            setSelectedConta(contas[currentIndex + 1]?.id || null);
-                          }
-                        }
-                      }}
-                      activeOpacity={0.7}>
-                      <Text style={styles.pickerText}>
-                        {selectedConta
-                          ? contas.find((c) => c.id === selectedConta)?.descricao || 'Selecione'
-                          : 'Nenhuma (criar nova)'}
-                      </Text>
-                      <IconSymbol name="chevron.down" size={16} color="rgba(255, 255, 255, 0.7)" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-              {/* Tipo de Conta */}
-              <View style={styles.inputGroup}>
-                <ThemedText style={styles.inputLabel}>Tipo de Conta *</ThemedText>
-                <View style={styles.accountTypeButtons}>
-                  <TouchableOpacity
-                    style={[styles.accountTypeButton, accountType === 'checking' && styles.accountTypeButtonActive]}
-                    onPress={() => setAccountType('checking')}
-                    activeOpacity={0.7}>
-                    <Text style={[styles.accountTypeButtonText, accountType === 'checking' && styles.accountTypeButtonTextActive]}>
-                      Conta Corrente
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.accountTypeButton, accountType === 'savings' && styles.accountTypeButtonActive]}
-                    onPress={() => setAccountType('savings')}
-                    activeOpacity={0.7}>
-                    <Text style={[styles.accountTypeButtonText, accountType === 'savings' && styles.accountTypeButtonTextActive]}>
-                      Poupança
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.accountTypeButton, accountType === 'investment' && styles.accountTypeButtonActive]}
-                    onPress={() => setAccountType('investment')}
-                    activeOpacity={0.7}>
-                    <Text style={[styles.accountTypeButtonText, accountType === 'investment' && styles.accountTypeButtonTextActive]}>
-                      Investimento
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <ThemedText style={styles.description}>
+                Conecte sua conta bancária com a Pluggy para importar transações e saldos.
+              </ThemedText>
 
               <View style={styles.actions}>
                 <Button
                   title={loading ? 'Conectando...' : 'Conectar Conta'}
                   onPress={handleCreateConnection}
-                  disabled={loading || !selectedBank}
+                  disabled={loading}
                   style={styles.primaryButton}
                 />
                 <Button
@@ -316,6 +140,14 @@ export function NewConnectionModal({ visible, onClose, onSuccess }: NewConnectio
         </View>
       </View>
     </Modal>
+    <PluggyConnectModal
+      visible={showPluggyWidget}
+      connectToken={pluggyConnectToken}
+      onClose={handlePluggyClose}
+      onSuccess={handlePluggySuccess}
+      onError={(msg) => showError(msg, { iconType: 'link' })}
+    />
+    </>
   );
 }
 
@@ -349,6 +181,12 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     gap: 20,
+  },
+  description: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 22,
+    marginBottom: 8,
   },
   inputGroup: {
     marginBottom: 16,
