@@ -38,7 +38,7 @@ import { formatCurrency } from '@/lib/utils/currency';
 export default function BankConnectionsScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
-  const { showSuccess, showError, showWarning } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
   const scrollRef = useScrollToTop();
 
   const [connections, setConnections] = useState<OpenFinanceConnection[]>([]);
@@ -140,6 +140,7 @@ export default function BankConnectionsScreen() {
             
             try {
               setRenewing(connection.id);
+              showInfo(`Renovando consentimento de ${connection.bank_name}...`, { iconType: 'link', duration: 2000 });
               
               // Gerar novos tokens simulados (em produção, isso viria da API do provedor)
               const newAccessToken = `token_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -196,6 +197,7 @@ export default function BankConnectionsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              showInfo(`Revogando conexão com ${connection.bank_name}...`, { iconType: 'link', duration: 2000 });
               await revokeConsent(connection.id, userId);
               
               showSuccess(`Consentimento revogado para ${connection.bank_name}`, {
@@ -223,6 +225,8 @@ export default function BankConnectionsScreen() {
     if (!userId) return;
 
     setImporting(connection.id);
+    const bankName = getBankByCode(connection.bank_code)?.name || connection.bank_name;
+    showInfo(`Importando transações de ${bankName}...`, { iconType: 'link', duration: 2000 });
 
     try {
       // TODO: Implementar busca real de transações da API
@@ -273,6 +277,8 @@ export default function BankConnectionsScreen() {
     if (!userId) return;
 
     setImporting(connection.id);
+    const bankName = getBankByCode(connection.bank_code)?.name || connection.bank_name;
+    showInfo(`Importando saldo de ${bankName}...`, { iconType: 'link', duration: 2000 });
 
     try {
       // TODO: Implementar busca real de saldo da API

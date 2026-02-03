@@ -209,13 +209,35 @@ export async function getUnreconciledTransactions(userId: string): Promise<Trans
 
     // Buscar IDs de transações já conciliadas (se a tabela existir)
     try {
-      const { data: reconciliations } = await supabase
+      const { data: reconciliations, error: reconciliationError } = await supabase
         .from('conciliacoes')
         .select('transacao_id')
         .in(
           'transacao_id',
           allTransactions.map((t) => t.id!).filter(Boolean)
         );
+
+      // Se a tabela não existe (404 ou PGRST116), retornar todas as transações
+      if (reconciliationError) {
+        const errorCode = reconciliationError.code;
+        const errorMessage = reconciliationError.message || '';
+        
+        if (
+          errorCode === 'PGRST116' ||
+          errorCode === '42P01' ||
+          errorMessage.includes('does not exist') ||
+          errorMessage.includes('schema cache') ||
+          errorMessage.includes('relation "public.conciliacoes" does not exist') ||
+          errorMessage.includes('relation "conciliacoes" does not exist') ||
+          errorMessage.includes('404')
+        ) {
+          console.warn('Tabela conciliacoes não encontrada. Retornando todas as transações.');
+          return allTransactions as TransactionWithAccount[];
+        }
+        // Se for outro erro, logar mas continuar retornando todas as transações
+        console.warn('Erro ao buscar conciliações (continuando sem filtrar):', reconciliationError);
+        return allTransactions as TransactionWithAccount[];
+      }
 
       const reconciledIds = new Set(reconciliations?.map((r) => r.transacao_id) || []);
 
@@ -225,11 +247,24 @@ export async function getUnreconciledTransactions(userId: string): Promise<Trans
       );
     } catch (reconciliationError: any) {
       // Se a tabela conciliacoes não existe, retornar todas as transações
-      if (reconciliationError?.code === 'PGRST116' || reconciliationError?.message?.includes('does not exist') || reconciliationError?.message?.includes('schema cache')) {
+      const errorCode = reconciliationError?.code;
+      const errorMessage = reconciliationError?.message || '';
+      
+      if (
+        errorCode === 'PGRST116' ||
+        errorCode === '42P01' ||
+        errorMessage.includes('does not exist') ||
+        errorMessage.includes('schema cache') ||
+        errorMessage.includes('relation "public.conciliacoes" does not exist') ||
+        errorMessage.includes('relation "conciliacoes" does not exist') ||
+        errorMessage.includes('404')
+      ) {
         console.warn('Tabela conciliacoes não encontrada. Retornando todas as transações.');
         return allTransactions as TransactionWithAccount[];
       }
-      throw reconciliationError;
+      // Para outros erros, retornar todas as transações em vez de quebrar
+      console.warn('Erro ao buscar conciliações (continuando sem filtrar):', reconciliationError);
+      return allTransactions as TransactionWithAccount[];
     }
   } catch (error: any) {
     console.error('Erro ao buscar transações não conciliadas:', error);
@@ -261,7 +296,7 @@ export async function getUnreconciledTitles(userId: string): Promise<TitleWithAc
 
     // Buscar IDs de títulos já conciliados (se a tabela existir)
     try {
-      const { data: reconciliations } = await supabase
+      const { data: reconciliations, error: reconciliationError } = await supabase
         .from('conciliacoes')
         .select('titulo_id')
         .in(
@@ -269,17 +304,52 @@ export async function getUnreconciledTitles(userId: string): Promise<TitleWithAc
           allTitles.map((t) => t.id!).filter(Boolean)
         );
 
+      // Se a tabela não existe (404 ou PGRST116), retornar todos os títulos
+      if (reconciliationError) {
+        const errorCode = reconciliationError.code;
+        const errorMessage = reconciliationError.message || '';
+        
+        if (
+          errorCode === 'PGRST116' ||
+          errorCode === '42P01' ||
+          errorMessage.includes('does not exist') ||
+          errorMessage.includes('schema cache') ||
+          errorMessage.includes('relation "public.conciliacoes" does not exist') ||
+          errorMessage.includes('relation "conciliacoes" does not exist') ||
+          errorMessage.includes('404')
+        ) {
+          console.warn('Tabela conciliacoes não encontrada. Retornando todos os títulos.');
+          return allTitles as TitleWithAccount[];
+        }
+        // Se for outro erro, logar mas continuar retornando todos os títulos
+        console.warn('Erro ao buscar conciliações (continuando sem filtrar):', reconciliationError);
+        return allTitles as TitleWithAccount[];
+      }
+
       const reconciledIds = new Set(reconciliations?.map((r) => r.titulo_id) || []);
 
       // Filtrar títulos não conciliados
       return (allTitles as TitleWithAccount[]).filter((t) => t.id && !reconciledIds.has(t.id));
     } catch (reconciliationError: any) {
       // Se a tabela conciliacoes não existe, retornar todos os títulos
-      if (reconciliationError?.code === 'PGRST116' || reconciliationError?.message?.includes('does not exist') || reconciliationError?.message?.includes('schema cache')) {
+      const errorCode = reconciliationError?.code;
+      const errorMessage = reconciliationError?.message || '';
+      
+      if (
+        errorCode === 'PGRST116' ||
+        errorCode === '42P01' ||
+        errorMessage.includes('does not exist') ||
+        errorMessage.includes('schema cache') ||
+        errorMessage.includes('relation "public.conciliacoes" does not exist') ||
+        errorMessage.includes('relation "conciliacoes" does not exist') ||
+        errorMessage.includes('404')
+      ) {
         console.warn('Tabela conciliacoes não encontrada. Retornando todos os títulos.');
         return allTitles as TitleWithAccount[];
       }
-      throw reconciliationError;
+      // Para outros erros, retornar todos os títulos em vez de quebrar
+      console.warn('Erro ao buscar conciliações (continuando sem filtrar):', reconciliationError);
+      return allTitles as TitleWithAccount[];
     }
   } catch (error: any) {
     console.error('Erro ao buscar títulos não conciliados:', error);
@@ -338,13 +408,16 @@ async function checkConciliacoesTableExists(): Promise<{ exists: boolean; error?
       const errorCode = error.code;
       const errorMessage = error.message || '';
       
-      // Verificar se é erro de tabela não encontrada
+      // Verificar se é erro de tabela não encontrada (404, PGRST116, 42P01)
       if (
         errorCode === 'PGRST116' ||
+        errorCode === '42P01' ||
         errorMessage.includes('does not exist') ||
         errorMessage.includes('schema cache') ||
         errorMessage.includes('relation "public.conciliacoes" does not exist') ||
-        errorMessage.includes('relation "conciliacoes" does not exist')
+        errorMessage.includes('relation "conciliacoes" does not exist') ||
+        errorMessage.includes('404') ||
+        errorMessage.includes('Not Found')
       ) {
         return { exists: false, error: 'Tabela não encontrada' };
       }
@@ -372,9 +445,13 @@ async function checkConciliacoesTableExists(): Promise<{ exists: boolean; error?
     
     if (
       errorCode === 'PGRST116' ||
+      errorCode === '42P01' ||
       errorMessage.includes('does not exist') ||
       errorMessage.includes('schema cache') ||
-      errorMessage.includes('relation "public.conciliacoes" does not exist')
+      errorMessage.includes('relation "public.conciliacoes" does not exist') ||
+      errorMessage.includes('relation "conciliacoes" does not exist') ||
+      errorMessage.includes('404') ||
+      errorMessage.includes('Not Found')
     ) {
       return { exists: false, error: 'Tabela não encontrada' };
     }

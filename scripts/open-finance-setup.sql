@@ -114,6 +114,12 @@ ALTER TABLE bank_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE integration_logs ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS: bank_connections
+-- Remover políticas existentes antes de criar (permite executar o script múltiplas vezes)
+DROP POLICY IF EXISTS "Usuários podem ver suas próprias conexões" ON bank_connections;
+DROP POLICY IF EXISTS "Usuários podem criar suas próprias conexões" ON bank_connections;
+DROP POLICY IF EXISTS "Usuários podem atualizar suas próprias conexões" ON bank_connections;
+DROP POLICY IF EXISTS "Usuários podem deletar suas próprias conexões" ON bank_connections;
+
 CREATE POLICY "Usuários podem ver suas próprias conexões"
   ON bank_connections FOR SELECT
   USING (auth.uid() = user_id);
@@ -132,6 +138,10 @@ CREATE POLICY "Usuários podem deletar suas próprias conexões"
   USING (auth.uid() = user_id);
 
 -- Políticas RLS: integration_logs
+-- Remover políticas existentes antes de criar
+DROP POLICY IF EXISTS "Usuários podem ver seus próprios logs" ON integration_logs;
+DROP POLICY IF EXISTS "Sistema pode criar logs" ON integration_logs;
+
 CREATE POLICY "Usuários podem ver seus próprios logs"
   ON integration_logs FOR SELECT
   USING (auth.uid() = user_id);
@@ -150,6 +160,9 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Remover trigger existente antes de criar (permite executar o script múltiplas vezes)
+DROP TRIGGER IF EXISTS trigger_update_bank_connections_updated_at ON bank_connections;
 
 CREATE TRIGGER trigger_update_bank_connections_updated_at
   BEFORE UPDATE ON bank_connections

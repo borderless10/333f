@@ -1,4 +1,18 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNotification } from '@/hooks/use-notification';
+import { buscarContas, type ContaBancaria } from '@/lib/contas';
+import {
+  createReconciliation,
+  generateMatchSuggestions,
+  getUnreconciledTitles,
+  getUnreconciledTransactions,
+  type MatchSuggestion,
+  type TitleWithAccount,
+  type TransactionWithAccount
+} from '@/lib/services/reconciliation';
+import { formatCurrency } from '@/lib/utils/currency';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,20 +31,6 @@ import { AnimatedBackground } from './animated-background';
 import { GlassContainer } from './glass-container';
 import { ThemedText } from './themed-text';
 import { IconSymbol } from './ui/icon-symbol';
-import { useAuth } from '@/contexts/AuthContext';
-import { useNotification } from '@/hooks/use-notification';
-import {
-  getUnreconciledTransactions,
-  getUnreconciledTitles,
-  generateMatchSuggestions,
-  createReconciliation,
-  removeReconciliation,
-  type MatchSuggestion,
-  type TransactionWithAccount,
-  type TitleWithAccount,
-} from '@/lib/services/reconciliation';
-import { formatCurrency } from '@/lib/utils/currency';
-import { buscarContas, type ContaBancaria } from '@/lib/contas';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COLUMN_WIDTH = (SCREEN_WIDTH - 64) / 2; // 16px padding de cada lado + 16px gap + 16px modal padding
@@ -332,8 +332,14 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    if (!dateString?.trim()) return '—';
+    try {
+      const date = new Date(dateString + 'T00:00:00');
+      if (isNaN(date.getTime())) return '—';
+      return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    } catch {
+      return '—';
+    }
   };
 
   const getMatchTypeColor = (matchType: MatchSuggestion['matchType']) => {
@@ -357,6 +363,22 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
     );
   }, [suggestions, transactions, titles]);
 
+  // Cálculo de totais para Sobras e Faltas
+  const sobrasFaltasSummary = useMemo(() => {
+    const totalSobras = transactions.reduce((acc, t) => {
+      const valor = t.tipo === 'receita' ? t.valor : -t.valor;
+      return acc + valor;
+    }, 0);
+    const totalFaltas = titles.reduce((acc, t) => {
+      const valor = t.tipo === 'receber' ? t.valor : -t.valor;
+      return acc + valor;
+    }, 0);
+    return {
+      sobras: { count: transactions.length, total: totalSobras, items: transactions },
+      faltas: { count: titles.length, total: totalFaltas, items: titles },
+    };
+  }, [transactions, titles]);
+
   // Estabilizar estilo de sugestão para Android
   const suggestionStyle = useMemo(() => ({
     opacity: suggestionAnim,
@@ -377,7 +399,7 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
       transparent={true}
       onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
+        <View style={[styles.modalContent, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
           <AnimatedBackground />
           <View style={styles.modalHeader}>
             <ThemedText type="title" style={styles.modalTitle}>
@@ -425,6 +447,150 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
             </TouchableOpacity>
           </View>
 
+          {/* Seção Sobras e Faltas */}
+          {!loading && (
+          <View style={styles.sobrasFaltasSection}>
+            <View style={styles.sobrasFaltasHeader}>
+              <View style={styles.sobrasFaltasTitleRow}>
+                <MaterialIcons name="compare-arrows" size={22} color="#00b09b" />
+                <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasTitle}>
+                  Sobras e Faltas
+                </ThemedText>
+              </View>
+              <ThemedText style={styles.sobrasFaltasSubtitle}>
+                Resumo das transações e títulos pendentes de conciliação
+              </ThemedText>
+            </View>
+            <View style={styles.sobrasFaltasCards}>
+              {/* Card Sobras - Extrato bancário sem correspondência no ERP */}
+              <GlassContainer style={[styles.sobrasFaltasCard, styles.sobrasFaltasCardSobras]}>
+                <View style={[styles.sobrasFaltasCardIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                  <MaterialIcons name="receipt" size={24} color="#10B981" />
+                </View>
+                <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasCardLabel}>Sobras</ThemedText>
+                <ThemedText style={styles.sobrasFaltasCardDesc}>
+                  Extrato sem título no ERP
+                </ThemedText>
+                <View style={styles.sobrasFaltasCardStats}>
+                  <View style={styles.sobrasFaltasBadge}>
+                    <Text style={styles.sobrasFaltasBadgeText}>
+                      {sobrasFaltasSummary.sobras.count} {sobrasFaltasSummary.sobras.count === 1 ? 'item' : 'itens'}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.sobrasFaltasTotal,
+                      { color: sobrasFaltasSummary.sobras.total >= 0 ? '#10B981' : '#EF4444' },
+                    ]}>
+                    {formatCurrency(Math.abs(sobrasFaltasSummary.sobras.total))}
+                    {sobrasFaltasSummary.sobras.total < 0 && ' (-)'}
+                  </Text>
+                </View>
+                {sobrasFaltasSummary.sobras.items.length > 0 ? (
+                  <ScrollView
+                    style={styles.sobrasFaltasList}
+                    showsVerticalScrollIndicator={false}
+                    nestedScrollEnabled>
+                    {sobrasFaltasSummary.sobras.items.slice(0, 5).map((item, idx) => (
+                      <View key={item.id} style={[styles.sobrasFaltasListItem, idx === 0 && styles.sobrasFaltasListItemFirst]}>
+                        <View style={styles.sobrasFaltasItemHeader}>
+                          <MaterialIcons name="receipt" size={12} color="rgba(16, 185, 129, 0.8)" style={styles.sobrasFaltasItemIcon} />
+                          <ThemedText style={styles.sobrasFaltasItemDesc} numberOfLines={1}>
+                            {item.descricao?.trim() || 'Transação sem descrição'}
+                          </ThemedText>
+                        </View>
+                        <View style={styles.sobrasFaltasItemRow}>
+                          <Text style={styles.sobrasFaltasItemDate}>{formatDate(item.data)}</Text>
+                          <Text
+                            style={[
+                              styles.sobrasFaltasItemValor,
+                              { color: item.tipo === 'receita' ? '#10B981' : '#EF4444' },
+                            ]}>
+                            {item.tipo === 'receita' ? '+' : '-'}{formatCurrency(item.valor)}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                    {sobrasFaltasSummary.sobras.items.length > 5 && (
+                      <ThemedText style={styles.sobrasFaltasMore}>
+                        +{sobrasFaltasSummary.sobras.items.length - 5} nas colunas abaixo
+                      </ThemedText>
+                    )}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.sobrasFaltasEmpty}>
+                    <MaterialIcons name="check-circle" size={28} color="rgba(16, 185, 129, 0.5)" />
+                    <ThemedText style={styles.sobrasFaltasEmptyText}>Tudo conciliado</ThemedText>
+                  </View>
+                )}
+              </GlassContainer>
+
+              {/* Card Faltas - Títulos ERP sem transação no extrato */}
+              <GlassContainer style={[styles.sobrasFaltasCard, styles.sobrasFaltasCardFaltas]}>
+                <View style={[styles.sobrasFaltasCardIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+                  <MaterialIcons name="description" size={24} color="#6366F1" />
+                </View>
+                <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasCardLabel}>Faltas</ThemedText>
+                <ThemedText style={styles.sobrasFaltasCardDesc}>
+                  ERP sem transação no extrato
+                </ThemedText>
+                <View style={styles.sobrasFaltasCardStats}>
+                  <View style={[styles.sobrasFaltasBadge, styles.sobrasFaltasBadgeFaltas]}>
+                    <Text style={[styles.sobrasFaltasBadgeText, styles.sobrasFaltasBadgeTextFaltas]}>
+                      {sobrasFaltasSummary.faltas.count} {sobrasFaltasSummary.faltas.count === 1 ? 'item' : 'itens'}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.sobrasFaltasTotal,
+                      { color: sobrasFaltasSummary.faltas.total >= 0 ? '#10B981' : '#EF4444' },
+                    ]}>
+                    {formatCurrency(Math.abs(sobrasFaltasSummary.faltas.total))}
+                    {sobrasFaltasSummary.faltas.total < 0 && ' (-)'}
+                  </Text>
+                </View>
+                {sobrasFaltasSummary.faltas.items.length > 0 ? (
+                  <ScrollView
+                    style={styles.sobrasFaltasList}
+                    showsVerticalScrollIndicator={false}
+                    nestedScrollEnabled>
+                    {sobrasFaltasSummary.faltas.items.slice(0, 5).map((item, idx) => (
+                      <View key={item.id} style={[styles.sobrasFaltasListItem, idx === 0 && styles.sobrasFaltasListItemFirst]}>
+                        <View style={styles.sobrasFaltasItemHeader}>
+                          <MaterialIcons name="description" size={12} color="rgba(99, 102, 241, 0.8)" style={styles.sobrasFaltasItemIcon} />
+                          <ThemedText style={styles.sobrasFaltasItemDesc} numberOfLines={1}>
+                            {item.fornecedor_cliente?.trim() || item.descricao?.trim() || 'Título sem identificação'}
+                          </ThemedText>
+                        </View>
+                        <View style={styles.sobrasFaltasItemRow}>
+                          <Text style={styles.sobrasFaltasItemDate}>{formatDate(item.data_vencimento)}</Text>
+                          <Text
+                            style={[
+                              styles.sobrasFaltasItemValor,
+                              { color: item.tipo === 'receber' ? '#10B981' : '#EF4444' },
+                            ]}>
+                            {item.tipo === 'receber' ? '+' : '-'}{formatCurrency(item.valor)}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                    {sobrasFaltasSummary.faltas.items.length > 5 && (
+                      <ThemedText style={styles.sobrasFaltasMore}>
+                        +{sobrasFaltasSummary.faltas.items.length - 5} nas colunas abaixo
+                      </ThemedText>
+                    )}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.sobrasFaltasEmpty}>
+                    <MaterialIcons name="check-circle" size={28} color="rgba(99, 102, 241, 0.5)" />
+                    <ThemedText style={styles.sobrasFaltasEmptyText}>Tudo conciliado</ThemedText>
+                  </View>
+                )}
+              </GlassContainer>
+            </View>
+          </View>
+          )}
+
           {/* Sugestões */}
           {visibleSuggestions.length > 0 && (
             <Animated.View
@@ -433,7 +599,7 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
                 <View style={styles.suggestionsHeader}>
                   <IconSymbol name="sparkles" size={18} color="#00b09b" />
                   <ThemedText type="defaultSemiBold" style={styles.suggestionsTitle}>
-                    {visibleSuggestions.length} Sugestão{visibleSuggestions.length !== 1 ? 'ões' : ''}
+                    {visibleSuggestions.length} {visibleSuggestions.length === 1 ? 'Sugestão' : 'Sugestões'}
                   </ThemedText>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestionsList}>
@@ -709,6 +875,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flex: 1,
+    minHeight: 0, // Permite que o flex funcione corretamente
   },
   modalHeader: {
     flexDirection: 'row',
@@ -839,10 +1006,11 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     flex: 1,
+    minHeight: 0, // Permite que o flex funcione corretamente
   },
   column: {
     flex: 1,
-    maxHeight: 500,
+    minHeight: 0, // Permite que o ScrollView interno funcione corretamente
   },
   columnHeader: {
     padding: 10,
@@ -871,6 +1039,7 @@ const styles = StyleSheet.create({
   },
   columnScroll: {
     flex: 1,
+    minHeight: 0, // Permite que o ScrollView funcione corretamente
   },
   columnContent: {
     gap: 6,
@@ -957,5 +1126,153 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  // Seção Sobras e Faltas
+  sobrasFaltasSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    marginBottom: 4,
+  },
+  sobrasFaltasHeader: {
+    marginBottom: 12,
+  },
+  sobrasFaltasTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  sobrasFaltasTitle: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  sobrasFaltasSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginLeft: 28,
+  },
+  sobrasFaltasCards: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  sobrasFaltasCard: {
+    flex: 1,
+    padding: 14,
+    minHeight: 160,
+    borderLeftWidth: 3,
+    overflow: 'hidden',
+  },
+  sobrasFaltasCardSobras: {
+    borderLeftColor: '#10B981',
+  },
+  sobrasFaltasCardFaltas: {
+    borderLeftColor: '#6366F1',
+  },
+  sobrasFaltasCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  sobrasFaltasCardLabel: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  sobrasFaltasCardDesc: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginBottom: 10,
+  },
+  sobrasFaltasCardStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  sobrasFaltasBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  sobrasFaltasBadgeFaltas: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  sobrasFaltasBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  sobrasFaltasBadgeTextFaltas: {
+    color: '#6366F1',
+  },
+  sobrasFaltasTotal: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  sobrasFaltasList: {
+    maxHeight: 100,
+  },
+  sobrasFaltasListItem: {
+    paddingVertical: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  sobrasFaltasListItemFirst: {
+    borderTopWidth: 0,
+    paddingTop: 4,
+  },
+  sobrasFaltasItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  sobrasFaltasItemIcon: {
+    marginRight: 0,
+  },
+  sobrasFaltasItemDesc: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 2,
+  },
+  sobrasFaltasItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sobrasFaltasItemDate: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  sobrasFaltasItemValor: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  sobrasFaltasMore: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  sobrasFaltasEmpty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  sobrasFaltasEmptyText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 6,
   },
 });
