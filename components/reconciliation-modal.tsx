@@ -7,9 +7,9 @@ import {
   getUnreconciledTitles,
   getUnreconciledTransactions,
   type MatchSuggestion,
-  type TitleWithAccount,
-  type TransactionWithAccount
 } from '@/lib/services/reconciliation';
+import type { TitleWithAccount } from '@/lib/services/titles';
+import type { TransactionWithAccount } from '@/lib/services/transactions';
 import { formatCurrency } from '@/lib/utils/currency';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -44,7 +44,7 @@ interface ReconciliationModalProps {
 export function ReconciliationModal({ visible, onClose, onSuccess }: ReconciliationModalProps) {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
 
   const [transactions, setTransactions] = useState<TransactionWithAccount[]>([]);
   const [titles, setTitles] = useState<TitleWithAccount[]>([]);
@@ -229,10 +229,17 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
 
     try {
       setMatching(true);
-      const matches = await generateMatchSuggestions(userId);
+      const matches = await generateMatchSuggestions(userId, undefined, filterAccount);
       
       if (visible) {
-        setSuggestions(matches || []);
+        const suggestionsList = matches || [];
+        setSuggestions(suggestionsList);
+
+        if (suggestionsList.length === 0) {
+          showInfo('Nenhuma sugestão encontrada. Tente conciliar manualmente selecionando uma transação e um título nas colunas.', {
+            duration: 3500,
+          });
+        }
 
         // Resetar e animar SEM callbacks
         try {

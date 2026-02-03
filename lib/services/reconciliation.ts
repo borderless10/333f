@@ -43,11 +43,12 @@ export interface MatchingConfig {
 
 /**
  * Configuração padrão de matching
+ * Valores mais permissivos para capturar mais sugestões no mundo real
  */
 const DEFAULT_MATCHING_CONFIG: MatchingConfig = {
-  valorTolerance: 0.01, // 1% de tolerância
-  dateTolerance: 5, // ±5 dias
-  minScore: 60, // Score mínimo de 60%
+  valorTolerance: 0.03, // 3% de tolerância (centavos, arredondamentos)
+  dateTolerance: 10, // ±10 dias (pagamento pode ocorrer antes/depois do vencimento)
+  minScore: 45, // Score mínimo de 45% para sugerir
 };
 
 /**
@@ -155,24 +156,24 @@ function calculateMatchScore(
     score -= 30; // Muito distante
   }
 
-  // Bônus por similaridade de descrição (até 30 pontos)
-  if (descriptionMatch >= 0.8) {
-    score += 0; // Já está no máximo
-  } else if (descriptionMatch >= 0.6) {
-    score -= 5; // Boa similaridade
+  // Penalidade por similaridade de descrição (até 25 pontos - reduzida pois descrições raramente batem)
+  if (descriptionMatch >= 0.6) {
+    score -= 0; // Boa similaridade - não penaliza
   } else if (descriptionMatch >= 0.4) {
-    score -= 15; // Similaridade média
+    score -= 8; // Similaridade média
+  } else if (descriptionMatch >= 0.2) {
+    score -= 15; // Pouca similaridade
   } else {
-    score -= 30; // Pouca similaridade
+    score -= 25; // Muito diferente (extrato "PIX" vs título "Fornecedor X")
   }
 
   // Determinar tipo de match
   let matchType: MatchSuggestion['matchType'] = 'close_match';
-  if (diferenca_valor === 0 && diferenca_dias === 0 && descriptionMatch >= 0.8) {
+  if (diferenca_valor === 0 && diferenca_dias === 0 && descriptionMatch >= 0.6) {
     matchType = 'perfect';
-  } else if (diferenca_valor === 0) {
+  } else if (valorPercentual <= config.valorTolerance) {
     matchType = 'value_match';
-  } else if (diferenca_dias === 0) {
+  } else if (diferenca_dias <= config.dateTolerance) {
     matchType = 'date_match';
   }
 
@@ -359,13 +360,23 @@ export async function getUnreconciledTitles(userId: string): Promise<TitleWithAc
 
 /**
  * Gera sugestões de matching automático
+ * @param userId - ID do usuário
+ * @param config - Configuração de matching (opcional)
+ * @param filterAccountId - ID da conta bancária para filtrar (opcional). Se informado, só considera transações/títulos desta conta
  */
 export async function generateMatchSuggestions(
   userId: string,
-  config: MatchingConfig = DEFAULT_MATCHING_CONFIG
+  config: MatchingConfig = DEFAULT_MATCHING_CONFIG,
+  filterAccountId?: number | null
 ): Promise<MatchSuggestion[]> {
-  const transactions = await getUnreconciledTransactions(userId);
-  const titles = await getUnreconciledTitles(userId);
+  let transactions = await getUnreconciledTransactions(userId);
+  let titles = await getUnreconciledTitles(userId);
+
+  // Filtrar por conta bancária quando especificado
+  if (filterAccountId) {
+    transactions = transactions.filter((t) => t.conta_bancaria_id === filterAccountId);
+    titles = titles.filter((t) => t.conta_bancaria_id === filterAccountId);
+  }
 
   const suggestions: MatchSuggestion[] = [];
 
@@ -373,12 +384,22 @@ export async function generateMatchSuggestions(
   for (const transaction of transactions) {
     for (const title of titles) {
       const match = calculateMatchScore(transaction, title, config);
+      let score = match.score;
 
-      if (match.score >= config.minScore) {
+      // Bônus: mesma conta bancária aumenta relevância
+      if (
+        transaction.conta_bancaria_id &&
+        title.conta_bancaria_id &&
+        transaction.conta_bancaria_id === title.conta_bancaria_id
+      ) {
+        score = Math.min(100, score + 5);
+      }
+
+      if (score >= config.minScore) {
         suggestions.push({
           transaction,
           title,
-          score: match.score,
+          score,
           diferenca_valor: match.diferenca_valor,
           diferenca_dias: match.diferenca_dias,
           matchType: match.matchType,
@@ -388,8 +409,22 @@ export async function generateMatchSuggestions(
     }
   }
 
-  // Ordenar por score (maior primeiro)
-  return suggestions.sort((a, b) => b.score - a.score);
+  // Ordenar por score (maior primeiro) e deduplicar: cada transação/título aparece no máximo uma vez
+  const sorted = suggestions.sort((a, b) => b.score - a.score);
+  const usedTxIds = new Set<number>();
+  const usedTitleIds = new Set<number>();
+  const deduplicated: MatchSuggestion[] = [];
+
+  for (const s of sorted) {
+    const txId = s.transaction.id!;
+    const titleId = s.title.id!;
+    if (usedTxIds.has(txId) || usedTitleIds.has(titleId)) continue;
+    usedTxIds.add(txId);
+    usedTitleIds.add(titleId);
+    deduplicated.push(s);
+  }
+
+  return deduplicated;
 }
 
 /**
