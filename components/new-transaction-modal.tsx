@@ -23,6 +23,7 @@ import { CurrencyInput } from './currency-input';
 import { criarTransacao, type Transaction } from '@/lib/services/transactions';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 import { useNotification } from '@/hooks/use-notification';
 import Toast from 'react-native-toast-message';
 import { toastConfig } from '@/components/NotificationToast';
@@ -36,6 +37,7 @@ interface NewTransactionModalProps {
 
 export function NewTransactionModal({ visible, onClose, onSuccess, returnToHome = false }: NewTransactionModalProps) {
   const { userId } = useAuth();
+  const { selectedCompany } = useCompany();
   const insets = useSafeAreaInsets();
   const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(false);
@@ -128,6 +130,7 @@ export function NewTransactionModal({ visible, onClose, onSuccess, returnToHome 
 
       const transacao: Omit<Transaction, 'id' | 'created_at' | 'updated_at'> = {
         codigo_empresa: userId,
+        empresa_id: selectedCompany?.id ?? null,
         descricao: descricao.trim(),
         valor: valorNum,
         data: formatDate(selectedDate),

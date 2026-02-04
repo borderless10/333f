@@ -1,7 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,6 +19,7 @@ import { AnimatedBackground } from '@/components/animated-background';
 import { GlassContainer } from '@/components/glass-container';
 import { ThemedText } from '@/components/themed-text';
 import { PasswordInput } from '@/components/ui/password-input';
+import { TELOS_LOGO } from '@/lib/assets';
 import { supabase } from '@/lib/supabase';
 
 export default function LoginScreen() {
@@ -26,6 +29,27 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
+
+  // Carregar preferências de "Lembrar de mim"
+  useEffect(() => {
+    const loadRememberedLogin = async () => {
+      try {
+        const [rememberValue, rememberedEmail] = await Promise.all([
+          AsyncStorage.getItem('@telos_remember_me'),
+          AsyncStorage.getItem('@telos_remembered_email'),
+        ]);
+
+        if (rememberValue === 'true' && rememberedEmail) {
+          setRememberMe(true);
+          setEmail(rememberedEmail);
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar preferências de login:', err);
+      }
+    };
+
+    loadRememberedLogin();
+  }, []);
 
   // Função para validar formato de email
   const validarEmail = (email: string): boolean => {
@@ -78,25 +102,68 @@ export default function LoginScreen() {
         }
         
         setError(mensagemErro);
-        setLoading(false);
         return;
       }
 
       if (data.user) {
         console.log('✅ Login bem-sucedido:', data.user.email);
+
+        // Persistir preferência de "Lembrar de mim"
+        if (rememberMe) {
+          await AsyncStorage.setItem('@telos_remember_me', 'true');
+          await AsyncStorage.setItem('@telos_remembered_email', email.trim());
+        } else {
+          await AsyncStorage.multiRemove(['@telos_remember_me', '@telos_remembered_email']);
+        }
+
         // O redirecionamento é feito automaticamente pelo _layout.tsx
         // após detectar que o usuário está autenticado
       }
     } catch (err) {
       console.error('❌ Erro inesperado no login:', err);
       setError('Erro inesperado. Tente novamente.');
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleSocialLogin = (provider: 'google' | 'microsoft') => {
-    console.log(`Login com ${provider}`);
-    // Implementar login social depois
+  const handleSocialLogin = async (provider: 'google' | 'microsoft') => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // URL de retorno para o app (usa o scheme configurado no app.json)
+      const redirectTo = Linking.createURL('/');
+
+      const supabaseProvider = provider === 'google' ? 'google' : 'azure';
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: supabaseProvider as 'google' | 'azure',
+        options: {
+          redirectTo,
+        },
+      });
+
+      if (error) {
+        let mensagemErro = 'Erro ao iniciar login social.';
+
+        if (error.message.includes('redirect')) {
+          mensagemErro =
+            'Erro de redirecionamento. Verifique a URL de callback configurada no Supabase.';
+        } else {
+          mensagemErro = error.message || mensagemErro;
+        }
+
+        setError(mensagemErro);
+      } else {
+        console.log(`🌐 Login ${provider} iniciado. Aguarde o retorno ao app.`);
+      }
+    } catch (err) {
+      console.error(`❌ Erro inesperado no login ${provider}:`, err);
+      setError(`Erro inesperado ao fazer login com ${provider}. Tente novamente.`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -112,12 +179,11 @@ export default function LoginScreen() {
           <View style={styles.content}>
             {/* Logo e Título */}
             <View style={styles.hero}>
-              <View style={styles.logoContainer}>
-                <MaterialIcons name="apartment" size={40} color="#00b09b" style={styles.logoIcon} />
-            <ThemedText type="title" style={styles.logo}>
-              Télos Control
-            </ThemedText>
-              </View>
+              <Image
+                source={TELOS_LOGO}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
               <View style={styles.divider} />
               <ThemedText style={styles.subtitle}>Sistema de controle financeiro</ThemedText>
             </View>
@@ -243,18 +309,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logoIcon: {
-    // Ícone de prédio já tem tamanho definido no MaterialIcons
-  },
-  logo: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  logoImage: {
+    width: 260,
+    height: 100,
+    marginBottom: 8,
   },
   divider: {
     width: 60,

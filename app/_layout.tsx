@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -58,18 +59,20 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <PermissionsProvider>
-          <CompanyProvider>
-            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-              <RootLayoutNav />
-              <StatusBar style="auto" />
-            </ThemeProvider>
-          </CompanyProvider>
-        </PermissionsProvider>
-      </AuthProvider>
-      <Toast config={toastConfig} topOffset={60} />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <PermissionsProvider>
+            <CompanyProvider>
+              <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <RootLayoutNav />
+                <StatusBar style="auto" />
+              </ThemeProvider>
+            </CompanyProvider>
+          </PermissionsProvider>
+        </AuthProvider>
+        <Toast config={toastConfig} topOffset={60} />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

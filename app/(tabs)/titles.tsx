@@ -1,4 +1,28 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { AnimatedBackground } from '@/components/animated-background';
+import { GlassContainer } from '@/components/glass-container';
+import { toastConfig } from '@/components/NotificationToast';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
+import { usePermissions } from '@/contexts/PermissionsContext';
+import { useNotification } from '@/hooks/use-notification';
+import { useScreenAnimations } from '@/hooks/use-screen-animations';
+import { useScrollToTop } from '@/hooks/use-scroll-to-top';
+import { buscarContas, type ContaBancaria } from '@/lib/contas';
+import {
+  atualizarTitulo,
+  buscarTitulos,
+  criarTitulo,
+  deletarTitulo,
+  desmarcarTituloComoPago,
+  marcarTituloComoPago,
+  type TitleWithAccount,
+} from '@/lib/services/titles';
+import { formatCurrency, formatCurrencyInput, parseCurrencyBRL } from '@/lib/utils/currency';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,31 +36,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AnimatedBackground } from '@/components/animated-background';
-import { GlassContainer } from '@/components/glass-container';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { ThemedText } from '@/components/themed-text';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/AuthContext';
-import { useCompany } from '@/contexts/CompanyContext';
-import { usePermissions } from '@/contexts/PermissionsContext';
-import { useScrollToTop } from '@/hooks/use-scroll-to-top';
-import { useScreenAnimations } from '@/hooks/use-screen-animations';
-import { useNotification } from '@/hooks/use-notification';
 import Toast from 'react-native-toast-message';
-import { toastConfig } from '@/components/NotificationToast';
-import { buscarContas, type ContaBancaria } from '@/lib/contas';
-import {
-  buscarTitulos,
-  criarTitulo,
-  atualizarTitulo,
-  deletarTitulo,
-  marcarTituloComoPago,
-  desmarcarTituloComoPago,
-  type TitleWithAccount,
-} from '@/lib/services/titles';
-import { formatCurrency, formatCurrencyInput, parseCurrencyBRL } from '@/lib/utils/currency';
 
 type FilterTipo = 'all' | 'pagar' | 'receber';
 type FilterStatus = 'all' | 'pendente' | 'pago' | 'vencido';
@@ -87,10 +87,10 @@ export default function TitlesScreen() {
     }
 
     try {
-      console.log('📋 Títulos: Carregando dados para userId:', userId);
+      console.log('📋 Títulos: Carregando dados para userId:', userId, 'empresaId:', selectedCompany?.id);
       setLoading(true);
       const [titlesResult, contasResult] = await Promise.all([
-        buscarTitulos(userId),
+        buscarTitulos(userId, selectedCompany?.id ?? null),
         buscarContas(userId),
       ]);
 
@@ -293,6 +293,7 @@ export default function TitlesScreen() {
 
       const titleData = {
         codigo_empresa: userId,
+        empresa_id: selectedCompany?.id ?? null,
         fornecedor_cliente: fornecedorCliente.trim(),
         descricao: descricao.trim() || undefined,
         valor: parseCurrencyBRL(valor),
@@ -324,7 +325,13 @@ export default function TitlesScreen() {
     }
 
     try {
-      await marcarTituloComoPago(userId, title.id!, undefined, title.conta_bancaria_id || undefined);
+      await marcarTituloComoPago(
+        userId,
+        title.id!,
+        undefined,
+        title.conta_bancaria_id || undefined,
+        selectedCompany?.id ?? null
+      );
       showSuccess('Título marcado como pago e transação criada!', { iconType: 'title' });
       await loadData();
     } catch (error: any) {

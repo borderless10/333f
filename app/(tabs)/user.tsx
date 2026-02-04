@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedBackground } from '@/components/animated-background';
@@ -9,6 +9,7 @@ import { GlassContainer } from '@/components/glass-container';
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
+import { TELOS_LOGO } from '@/lib/assets';
 import { getRoleName, getRoleDescription, getRoleColor } from '@/lib/services/profiles';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@supabase/supabase-js';
@@ -190,6 +191,18 @@ export default function UserScreen() {
             </>
           )}
         </TouchableOpacity>
+
+        {/* Footer com Logo e Copyright */}
+        <View style={styles.footer}>
+          <Image
+            source={TELOS_LOGO}
+            style={styles.footerLogo}
+            resizeMode="contain"
+          />
+          <Text style={styles.copyright}>
+            Todos os direitos reservados p/ Télos Control Devops, com copyright
+          </Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -326,5 +339,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  footer: {
+    alignItems: 'center',
+    marginTop: 48,
+    marginBottom: 24,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  footerLogo: {
+    width: 150,
+    height: 60,
+    marginBottom: 16,
+  },
+  copyright: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

@@ -52,9 +52,9 @@ export default function TransactionsScreen() {
     }
 
     try {
-      console.log('📊 Transações: Carregando dados para userId:', userId);
+      console.log('📊 Transações: Carregando dados para userId:', userId, 'empresaId:', selectedCompany?.id);
       setLoading(true);
-      const { data, error } = await buscarTransacoes(userId);
+      const { data, error } = await buscarTransacoes(userId, selectedCompany?.id ?? null);
       
       if (error) {
         console.error('❌ Erro ao buscar transações:', error);

@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
 import { useNotification } from '@/hooks/use-notification';
 import { buscarTransacoes, type TransactionWithAccount } from '@/lib/services/transactions';
+import { buscarTitulos, type TitleWithAccount } from '@/lib/services/titles';
 import { formatCurrency } from '@/lib/utils/currency';
 import { generateReconciliationReport, shareReconciliationReport } from '@/lib/services/reconciliation-export';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -19,6 +20,46 @@ import { router } from 'expo-router';
 import React, { useEffect, useMemo } from 'react';
 import { ActivityIndicator, Alert, Animated, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+type PeriodType = 'today' | 'week' | 'month' | 'year';
+
+// Funções auxiliares para calcular períodos
+const getPeriodDates = (period: PeriodType): { start: Date; end: Date } => {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  
+  switch (period) {
+    case 'today':
+      start.setHours(0, 0, 0, 0);
+      break;
+    case 'week':
+      start.setDate(start.getDate() - 7);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case 'month':
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case 'year':
+      start.setMonth(0, 1);
+      start.setHours(0, 0, 0, 0);
+      break;
+  }
+  
+  return { start, end };
+};
+
+const getPreviousPeriodDates = (period: PeriodType): { start: Date; end: Date } => {
+  const { start: currentStart, end: currentEnd } = getPeriodDates(period);
+  const duration = currentEnd.getTime() - currentStart.getTime();
+  const end = new Date(currentStart.getTime() - 1);
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end.getTime() - duration);
+  start.setHours(0, 0, 0, 0);
+  
+  return { start, end };
+};
 
 export default function DashboardScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
@@ -29,6 +70,9 @@ export default function DashboardScreen() {
   const [reconciliationHistoryVisible, setReconciliationHistoryVisible] = React.useState(false);
   const [exportingReport, setExportingReport] = React.useState(false);
   const [transactions, setTransactions] = React.useState<TransactionWithAccount[]>([]);
+  const [allTransactions, setAllTransactions] = React.useState<TransactionWithAccount[]>([]); // Todas as transações (sem filtro)
+  const [titles, setTitles] = React.useState<TitleWithAccount[]>([]);
+  const [selectedPeriod, setSelectedPeriod] = React.useState<'today' | 'week' | 'month' | 'year'>('month');
   const [loading, setLoading] = React.useState(true);
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
@@ -187,30 +231,48 @@ export default function DashboardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Carregar transações do Supabase
+  // Carregar transações e títulos do Supabase
   const loadTransactions = React.useCallback(async () => {
     if (!userId) {
       setLoading(false);
       setTransactions([]);
+      setAllTransactions([]);
+      setTitles([]);
       return;
     }
 
     try {
       setLoading(true);
-      const { data, error } = await buscarTransacoes(userId);
       
-      if (error) {
-        console.error('Erro ao carregar transações:', error);
+      // Buscar transações e títulos em paralelo, filtrando pela empresa selecionada (se houver)
+      const empresaId = selectedCompany?.id ?? null;
+      const [transactionsResult, titlesResult] = await Promise.all([
+        buscarTransacoes(userId, empresaId),
+        buscarTitulos(userId, empresaId),
+      ]);
+      
+      if (transactionsResult.error) {
+        console.error('Erro ao carregar transações:', transactionsResult.error);
         showError('Não foi possível carregar os dados financeiros.');
         setTransactions([]);
-        return;
+        setAllTransactions([]);
+      } else {
+        const allData = transactionsResult.data || [];
+        setAllTransactions(allData);
       }
       
-      setTransactions(data || []);
+      if (titlesResult.error) {
+        console.error('Erro ao carregar títulos:', titlesResult.error);
+        setTitles([]);
+      } else {
+        setTitles(titlesResult.data || []);
+      }
     } catch (error) {
-      console.error('Erro ao carregar transações:', error);
+      console.error('Erro ao carregar dados:', error);
       showError('Erro ao carregar dados financeiros.');
       setTransactions([]);
+      setAllTransactions([]);
+      setTitles([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -220,6 +282,29 @@ export default function DashboardScreen() {
   useEffect(() => {
     loadTransactions();
   }, [loadTransactions]);
+
+  // Filtrar transações por período selecionado
+  const filteredTransactions = useMemo(() => {
+    const { start, end } = getPeriodDates(selectedPeriod);
+    return allTransactions.filter((t) => {
+      const transactionDate = new Date(t.data + 'T00:00:00');
+      return transactionDate >= start && transactionDate <= end;
+    });
+  }, [allTransactions, selectedPeriod]);
+
+  // Transações do período anterior para comparação
+  const previousPeriodTransactions = useMemo(() => {
+    const { start, end } = getPreviousPeriodDates(selectedPeriod);
+    return allTransactions.filter((t) => {
+      const transactionDate = new Date(t.data + 'T00:00:00');
+      return transactionDate >= start && transactionDate <= end;
+    });
+  }, [allTransactions, selectedPeriod]);
+
+  // Atualizar transações filtradas quando período mudar
+  useEffect(() => {
+    setTransactions(filteredTransactions);
+  }, [filteredTransactions]);
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -380,24 +465,60 @@ export default function DashboardScreen() {
     );
   };
 
-  // Calcular dados financeiros a partir das transações reais
+  // Calcular dados financeiros do período atual
   const financialData = useMemo(() => {
-    const income = transactions
+    const income = filteredTransactions
       .filter((t: TransactionWithAccount) => t.tipo === 'receita')
       .reduce((sum: number, t: TransactionWithAccount) => sum + Number(t.valor), 0);
     
-    const expense = transactions
+    const expense = filteredTransactions
       .filter((t: TransactionWithAccount) => t.tipo === 'despesa')
       .reduce((sum: number, t: TransactionWithAccount) => sum + Number(t.valor), 0);
     
     const balance = income - expense;
     
     return {
-      balance: formatCurrency(balance),
-      income: formatCurrency(income),
-      expense: formatCurrency(expense),
+      balance,
+      income,
+      expense,
+      balanceFormatted: formatCurrency(balance),
+      incomeFormatted: formatCurrency(income),
+      expenseFormatted: formatCurrency(expense),
     };
-  }, [transactions]);
+  }, [filteredTransactions]);
+
+  // Calcular dados do período anterior para comparação
+  const previousFinancialData = useMemo(() => {
+    const income = previousPeriodTransactions
+      .filter((t: TransactionWithAccount) => t.tipo === 'receita')
+      .reduce((sum: number, t: TransactionWithAccount) => sum + Number(t.valor), 0);
+    
+    const expense = previousPeriodTransactions
+      .filter((t: TransactionWithAccount) => t.tipo === 'despesa')
+      .reduce((sum: number, t: TransactionWithAccount) => sum + Number(t.valor), 0);
+    
+    const balance = income - expense;
+    
+    return { balance, income, expense };
+  }, [previousPeriodTransactions]);
+
+  // Calcular comparação percentual
+  const comparison = useMemo(() => {
+    const calculateChange = (current: number, previous: number): { value: number; percentage: number; isPositive: boolean } => {
+      if (previous === 0) {
+        return { value: current, percentage: current > 0 ? 100 : 0, isPositive: current >= 0 };
+      }
+      const change = current - previous;
+      const percentage = (change / Math.abs(previous)) * 100;
+      return { value: change, percentage: Math.abs(percentage), isPositive: change >= 0 };
+    };
+
+    return {
+      balance: calculateChange(financialData.balance, previousFinancialData.balance),
+      income: calculateChange(financialData.income, previousFinancialData.income),
+      expense: calculateChange(financialData.expense, previousFinancialData.expense),
+    };
+  }, [financialData, previousFinancialData]);
 
   // Animações para cada item de transação (fixo: 4 refs)
   const transactionAnim1 = React.useRef(new Animated.Value(0)).current;
@@ -405,6 +526,102 @@ export default function DashboardScreen() {
   const transactionAnim3 = React.useRef(new Animated.Value(0)).current;
   const transactionAnim4 = React.useRef(new Animated.Value(0)).current;
   const transactionAnims = [transactionAnim1, transactionAnim2, transactionAnim3, transactionAnim4];
+
+  // Calcular alertas
+  const alerts = useMemo(() => {
+    const alertsList: Array<{ type: 'warning' | 'error' | 'info'; message: string; action?: () => void }> = [];
+    
+    // Títulos vencendo nos próximos 7 dias
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const em7Dias = new Date(hoje);
+    em7Dias.setDate(em7Dias.getDate() + 7);
+    
+    const titulosVencendo = titles.filter((t) => {
+      if (t.status === 'pago') return false;
+      const vencimento = new Date(t.data_vencimento);
+      vencimento.setHours(0, 0, 0, 0);
+      return vencimento >= hoje && vencimento <= em7Dias;
+    });
+    
+    if (titulosVencendo.length > 0) {
+      const totalVencendo = titulosVencendo.reduce((sum, t) => sum + Number(t.valor), 0);
+      alertsList.push({
+        type: 'warning',
+        message: `${titulosVencendo.length} título${titulosVencendo.length > 1 ? 's' : ''} vencendo em até 7 dias (${formatCurrency(totalVencendo)})`,
+        action: () => router.push('/(tabs)/titles'),
+      });
+    }
+    
+    // Títulos vencidos
+    const titulosVencidos = titles.filter((t) => t.status === 'vencido');
+    if (titulosVencidos.length > 0) {
+      const totalVencido = titulosVencidos.reduce((sum, t) => sum + Number(t.valor), 0);
+      alertsList.push({
+        type: 'error',
+        message: `${titulosVencidos.length} título${titulosVencidos.length > 1 ? 's' : ''} vencido${titulosVencidos.length > 1 ? 's' : ''} (${formatCurrency(totalVencido)})`,
+        action: () => router.push('/(tabs)/titles'),
+      });
+    }
+    
+    // Saldo baixo (menor que 10% das receitas do mês ou negativo)
+    const receitasMes = financialData.income;
+    const saldoAtual = financialData.balance;
+    const thresholdSaldoBaixo = receitasMes * 0.1; // 10% das receitas
+    
+    if (saldoAtual < 0) {
+      alertsList.push({
+        type: 'error',
+        message: `Saldo negativo! ${formatCurrency(Math.abs(saldoAtual))}`,
+      });
+    } else if (saldoAtual < thresholdSaldoBaixo && receitasMes > 0) {
+      alertsList.push({
+        type: 'warning',
+        message: `Saldo baixo: ${formatCurrency(saldoAtual)} (menor que 10% das receitas)`,
+      });
+    }
+    
+    return alertsList;
+  }, [titles, financialData]);
+
+  // Resumo por categoria
+  const categorySummary = useMemo(() => {
+    const categoryMap = new Map<string, { income: number; expense: number }>();
+    
+    filteredTransactions.forEach((t) => {
+      const current = categoryMap.get(t.categoria) || { income: 0, expense: 0 };
+      if (t.tipo === 'receita') {
+        current.income += Number(t.valor);
+      } else {
+        current.expense += Number(t.valor);
+      }
+      categoryMap.set(t.categoria, current);
+    });
+    
+    // Top 5 despesas por categoria
+    const topExpenses = Array.from(categoryMap.entries())
+      .map(([categoria, data]) => ({
+        categoria,
+        valor: data.expense,
+        tipo: 'expense' as const,
+      }))
+      .filter((item) => item.valor > 0)
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 5);
+    
+    // Top 5 receitas por categoria
+    const topIncomes = Array.from(categoryMap.entries())
+      .map(([categoria, data]) => ({
+        categoria,
+        valor: data.income,
+        tipo: 'income' as const,
+      }))
+      .filter((item) => item.valor > 0)
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 5);
+    
+    return { topExpenses, topIncomes };
+  }, [filteredTransactions]);
 
   // Transações recentes (últimas 4)
   const recentTransactions = useMemo(() => {
@@ -502,6 +719,30 @@ export default function DashboardScreen() {
             subtitle="Resumo financeiro"
             showCompanySelector={true}
           />
+          
+          {/* Filtro de Período */}
+          <View style={styles.periodSelector}>
+            {(['today', 'week', 'month', 'year'] as PeriodType[]).map((period) => {
+              const labels: Record<PeriodType, string> = {
+                today: 'Hoje',
+                week: 'Semana',
+                month: 'Mês',
+                year: 'Ano',
+              };
+              const isSelected = selectedPeriod === period;
+              return (
+                <TouchableOpacity
+                  key={period}
+                  style={[styles.periodButton, isSelected && styles.periodButtonActive]}
+                  onPress={() => setSelectedPeriod(period)}
+                  activeOpacity={0.7}>
+                  <Text style={[styles.periodButtonText, isSelected && styles.periodButtonTextActive]}>
+                    {labels[period]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </Animated.View>
 
         {/* Financial Cards */}
@@ -535,14 +776,23 @@ export default function DashboardScreen() {
               </ThemedText>
             </View>
             <Text style={styles.balanceAmount}>
-              {financialData.balance}
+              {financialData.balanceFormatted}
             </Text>
-            <View style={styles.balanceTrend}>
-              <IconSymbol name="arrow.up.right" size={14} color="#10B981" />
-              <Text style={styles.balanceTrendText}>
-                +12,5%
-              </Text>
-            </View>
+            {comparison.balance.percentage > 0 && (
+              <View style={styles.balanceTrend}>
+                <IconSymbol 
+                  name={comparison.balance.isPositive ? "arrow.up.right" : "arrow.down.right"} 
+                  size={14} 
+                  color={comparison.balance.isPositive ? "#10B981" : "#EF4444"} 
+                />
+                <Text style={[
+                  styles.balanceTrendText,
+                  { color: comparison.balance.isPositive ? "#10B981" : "#EF4444" }
+                ]}>
+                  {comparison.balance.isPositive ? '+' : '-'}{comparison.balance.percentage.toFixed(1)}%
+                </Text>
+              </View>
+            )}
           </GlassContainer>
           </Animated.View>
 
@@ -577,14 +827,23 @@ export default function DashboardScreen() {
                 </Text>
               </View>
               <Text style={styles.squareAmount}>
-                {financialData.income}
+                {financialData.incomeFormatted}
               </Text>
-              <View style={styles.squareTrend}>
-                <IconSymbol name="arrow.up.right" size={12} color="#10B981" />
-                <Text style={styles.squareTrendText}>
-                  +8,2%
-                </Text>
-              </View>
+              {comparison.income.percentage > 0 && (
+                <View style={styles.squareTrend}>
+                  <IconSymbol 
+                    name={comparison.income.isPositive ? "arrow.up.right" : "arrow.down.right"} 
+                    size={12} 
+                    color={comparison.income.isPositive ? "#10B981" : "#EF4444"} 
+                  />
+                  <Text style={[
+                    styles.squareTrendText,
+                    { color: comparison.income.isPositive ? "#10B981" : "#EF4444" }
+                  ]}>
+                    {comparison.income.isPositive ? '+' : '-'}{comparison.income.percentage.toFixed(1)}%
+                  </Text>
+                </View>
+              )}
             </GlassContainer>
             </Animated.View>
 
@@ -617,18 +876,147 @@ export default function DashboardScreen() {
                 </Text>
               </View>
               <Text style={styles.squareAmount}>
-                {financialData.expense}
+                {financialData.expenseFormatted}
               </Text>
-              <View style={styles.squareTrend}>
-                <IconSymbol name="arrow.down.right" size={12} color="#EF4444" />
-                <Text style={[styles.squareTrendText, { color: '#EF4444' }]}>
-                  -3,1%
-                </Text>
-              </View>
+              {comparison.expense.percentage > 0 && (
+                <View style={styles.squareTrend}>
+                  <IconSymbol 
+                    name={comparison.expense.isPositive ? "arrow.up.right" : "arrow.down.right"} 
+                    size={12} 
+                    color={comparison.expense.isPositive ? "#10B981" : "#EF4444"} 
+                  />
+                  <Text style={[
+                    styles.squareTrendText,
+                    { color: comparison.expense.isPositive ? "#10B981" : "#EF4444" }
+                  ]}>
+                    {comparison.expense.isPositive ? '+' : '-'}{comparison.expense.percentage.toFixed(1)}%
+                  </Text>
+                </View>
+              )}
             </GlassContainer>
             </Animated.View>
           </View>
         </View>
+
+        {/* Alertas */}
+        {alerts.length > 0 && (
+          <Animated.View 
+            style={[
+              styles.section,
+              {
+                opacity: transactionsAnim,
+                transform: [
+                  {
+                    translateY: transactionsAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [20, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}>
+            <View style={styles.sectionHeader}>
+              <ThemedText type="subtitle" style={styles.sectionTitle}>Alertas</ThemedText>
+            </View>
+            <GlassContainer style={styles.alertsCard}>
+              {alerts.map((alert, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.alertItem,
+                    index < alerts.length - 1 && styles.alertItemBorder,
+                    alert.type === 'error' && styles.alertItemError,
+                    alert.type === 'warning' && styles.alertItemWarning,
+                  ]}
+                  onPress={alert.action}
+                  activeOpacity={alert.action ? 0.7 : 1}>
+                  <View style={styles.alertContent}>
+                    <IconSymbol
+                      name={alert.type === 'error' ? 'exclamationmark.triangle.fill' : 'exclamationmark.circle.fill'}
+                      size={20}
+                      color={alert.type === 'error' ? '#EF4444' : '#FBBF24'}
+                    />
+                    <Text style={styles.alertText}>{alert.message}</Text>
+                  </View>
+                  {alert.action && (
+                    <IconSymbol name="chevron.right" size={16} color="rgba(255, 255, 255, 0.5)" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </GlassContainer>
+          </Animated.View>
+        )}
+
+        {/* Resumo por Categoria */}
+        {(categorySummary.topExpenses.length > 0 || categorySummary.topIncomes.length > 0) && (
+          <Animated.View 
+            style={[
+              styles.section,
+              {
+                opacity: transactionsAnim,
+                transform: [
+                  {
+                    translateY: transactionsAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [20, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}>
+            <View style={styles.sectionHeader}>
+              <ThemedText type="subtitle" style={styles.sectionTitle}>Resumo por Categoria</ThemedText>
+            </View>
+            <View style={styles.categoryRow}>
+              {categorySummary.topExpenses.length > 0 && (
+                <GlassContainer style={styles.categoryCard}>
+                  <View style={styles.categoryHeader}>
+                    <IconSymbol name="arrow.up.circle.fill" size={18} color="#EF4444" />
+                    <ThemedText type="defaultSemiBold" style={styles.categoryTitle}>Top Despesas</ThemedText>
+                  </View>
+                  {categorySummary.topExpenses.map((item, index) => (
+                    <View key={item.categoria} style={styles.categoryItem}>
+                      <View style={styles.categoryItemTopRow}>
+                        <View style={[styles.categoryRank, { backgroundColor: '#EF444420' }]}>
+                          <Text style={[styles.categoryRankText, { color: '#EF4444' }]}>{index + 1}</Text>
+                        </View>
+                        <ThemedText style={styles.categoryName}>
+                          {item.categoria}
+                        </ThemedText>
+                      </View>
+                      <Text style={[styles.categoryValue, { color: '#EF4444' }]}>
+                        {formatCurrency(item.valor)}
+                      </Text>
+                    </View>
+                  ))}
+                </GlassContainer>
+              )}
+              {categorySummary.topIncomes.length > 0 && (
+                <GlassContainer style={styles.categoryCard}>
+                  <View style={styles.categoryHeader}>
+                    <IconSymbol name="arrow.down.circle.fill" size={18} color="#10B981" />
+                    <ThemedText type="defaultSemiBold" style={styles.categoryTitle}>Top Receitas</ThemedText>
+                  </View>
+                  {categorySummary.topIncomes.map((item, index) => (
+                    <View key={item.categoria} style={styles.categoryItem}>
+                      <View style={styles.categoryItemTopRow}>
+                        <View style={[styles.categoryRank, { backgroundColor: '#10B98120' }]}>
+                          <Text style={[styles.categoryRankText, { color: '#10B981' }]}>{index + 1}</Text>
+                        </View>
+                        <ThemedText style={styles.categoryName}>
+                          {item.categoria}
+                        </ThemedText>
+                      </View>
+                      <Text style={[styles.categoryValue, { color: '#10B981' }]}>
+                        {formatCurrency(item.valor)}
+                      </Text>
+                    </View>
+                  ))}
+                </GlassContainer>
+              )}
+            </View>
+          </Animated.View>
+        )}
 
         {/* Recent Transactions */}
         <Animated.View 
@@ -1263,5 +1651,117 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#00b09b',
+  },
+  periodSelector: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  periodButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+  },
+  periodButtonActive: {
+    backgroundColor: '#00b09b',
+    borderColor: '#00b09b',
+  },
+  periodButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  periodButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  alertsCard: {
+    padding: 0,
+    overflow: 'hidden',
+  },
+  alertItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  alertItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  alertItemError: {
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+  },
+  alertItemWarning: {
+    backgroundColor: 'rgba(251, 191, 36, 0.05)',
+  },
+  alertContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  alertText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#FFFFFF',
+    lineHeight: 20,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  categoryCard: {
+    flex: 1,
+    padding: 16,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  categoryTitle: {
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  categoryItem: {
+    flexDirection: 'column',
+    paddingVertical: 10,
+  },
+  categoryItemTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginBottom: 4,
+  },
+  categoryRank: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryRankText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  categoryName: {
+    flexShrink: 1,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.9)',
+    flexWrap: 'wrap',
+  },
+  categoryValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 34,
+    marginTop: 2,
   },
 });

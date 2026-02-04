@@ -3,6 +3,9 @@ import { supabase } from '../supabase';
 export interface Transaction {
   id?: number;
   codigo_empresa: string; // user_id
+  // Empresa selecionada dentro do usuário (multi-empresa)
+  // Referência à tabela `empresas.id`
+  empresa_id?: number | null;
   descricao: string;
   valor: number;
   data: string; // formato: YYYY-MM-DD
@@ -23,17 +26,27 @@ export interface TransactionWithAccount extends Transaction {
 /**
  * Busca todas as transações do usuário
  */
-export async function buscarTransacoes(userId: string) {
-  const { data, error } = await supabase
+export async function buscarTransacoes(userId: string, empresaId?: number | null) {
+  let query = supabase
     .from('transacoes')
-    .select(`
+    .select(
+      `
       *,
       contas_bancarias:conta_bancaria_id (
         id,
         descricao
       )
-    `)
-    .eq('codigo_empresa', userId)
+    `
+    )
+    .eq('codigo_empresa', userId);
+
+  // Se uma empresa estiver selecionada, filtra por ela.
+  // Isso permite que cada empresa tenha seu próprio conjunto de transações.
+  if (empresaId) {
+    query = query.eq('empresa_id', empresaId);
+  }
+
+  const { data, error } = await query
     .order('data', { ascending: false })
     .order('created_at', { ascending: false });
 

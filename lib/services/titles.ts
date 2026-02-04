@@ -4,6 +4,9 @@ import { criarTransacao } from './transactions';
 export interface Title {
   id?: number;
   codigo_empresa: string; // user_id
+  // Empresa selecionada dentro do usuário (multi-empresa)
+  // Referência à tabela `empresas.id`
+  empresa_id?: number | null;
   descricao?: string;
   fornecedor_cliente: string;
   valor: number;
@@ -49,16 +52,22 @@ export interface TitleFilters {
 /**
  * Busca títulos do usuário com filtros opcionais
  */
-export async function buscarTitulos(userId: string, filters?: TitleFilters) {
+export async function buscarTitulos(
+  userId: string,
+  empresaId?: number | null,
+  filters?: TitleFilters
+) {
   let query = supabase
     .from('titulos')
-    .select(`
+    .select(
+      `
       *,
       contas_bancarias:conta_bancaria_id (
         id,
         descricao
       )
-    `)
+    `
+    )
     .eq('codigo_empresa', userId)
     .order('data_vencimento', { ascending: false });
 
@@ -182,7 +191,8 @@ export async function marcarTituloComoPago(
   userId: string,
   tituloId: number,
   dataPagamento?: string,
-  contaBancariaId?: number
+  contaBancariaId?: number,
+  empresaId?: number | null
 ) {
   // Busca o título
   const { data: titulo, error: erroTitulo } = await supabase
@@ -221,6 +231,7 @@ export async function marcarTituloComoPago(
 
   await criarTransacao({
     codigo_empresa: userId,
+    empresa_id: empresaId ?? null,
     descricao: descricaoTransacao,
     valor: titulo.valor,
     data: dataFinal,

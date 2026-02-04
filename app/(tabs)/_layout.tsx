@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
+import { SwipeableTabWrapper } from '@/components/swipeable-tab-wrapper';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -36,8 +37,9 @@ export default function TabLayout() {
   }, [pathname]);
 
   return (
-    <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-      <Tabs
+    <SwipeableTabWrapper>
+      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+        <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#00b09b',
         tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.6)',
@@ -113,7 +115,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <MaterialIcons name="settings" size={28} color={color} />,
         }}
       />
-    </Tabs>
-    </Animated.View>
+        </Tabs>
+      </Animated.View>
+    </SwipeableTabWrapper>
   );
 }
