@@ -86,8 +86,9 @@ export default function UsersScreen() {
         if (resultado.error.message?.includes('Acesso negado') || resultado.error.message?.includes('permission denied')) {
           showWarning('Apenas administradores podem acessar esta página.');
         } else {
-          // Não mostra alerta para erros comuns, apenas loga
-          console.warn('[UsersScreen] Erro ao carregar usuários (não crítico):', resultado.error.message);
+          // Mostra erro para outros tipos de erro
+          console.warn('[UsersScreen] Erro ao carregar usuários:', resultado.error.message);
+          showError('Não foi possível carregar os usuários', { iconType: 'user' });
         }
         setUsers([]); // Limpa a lista em caso de erro
         return;
@@ -103,6 +104,7 @@ export default function UsersScreen() {
     } catch (error: any) {
       console.error('[UsersScreen] Exceção ao carregar usuários:', error);
       setUsers([]); // Limpa a lista em caso de erro
+      showError(error?.message || 'Erro ao carregar usuários', { iconType: 'user' });
     } finally {
       // SEMPRE desliga o loading, mesmo em caso de erro
       console.log('[UsersScreen] Desligando loading...');
@@ -280,8 +282,10 @@ export default function UsersScreen() {
       // Recarrega a lista para garantir que está atualizada
       await loadUsers();
       
-      // Mostra erro dentro do modal
-      setNewUserModalError(error.message || 'Não foi possível criar o usuário');
+      const errorMsg = error.message || 'Não foi possível criar o usuário';
+      // Mostra erro dentro do modal e como toast
+      setNewUserModalError(errorMsg);
+      showError(errorMsg, { iconType: 'user' });
     }
   };
 

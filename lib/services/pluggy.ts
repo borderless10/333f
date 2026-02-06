@@ -65,3 +65,141 @@ export function getPluggyConnectUrl(connectToken: string): string {
   const encoded = encodeURIComponent(connectToken);
   return `${PLUGGY_CONNECT_BASE_URL}?connectToken=${encoded}&token=${encoded}#connectToken=${encoded}`;
 }
+
+/**
+ * Interface para transação da Pluggy
+ */
+export interface PluggyTransaction {
+  id: string;
+  description: string;
+  descriptionRaw?: string;
+  amount: number;
+  date: string; // ISO date
+  balance?: number;
+  category?: string;
+  type: 'DEBIT' | 'CREDIT';
+  status: 'PENDING' | 'POSTED';
+  currencyCode: string;
+  accountId: string;
+}
+
+/**
+ * Interface para conta da Pluggy
+ */
+export interface PluggyAccount {
+  id: string;
+  type: 'BANK' | 'CREDIT';
+  subtype: 'CHECKING_ACCOUNT' | 'SAVINGS_ACCOUNT' | 'CREDIT_CARD';
+  number?: string;
+  name: string;
+  balance: number;
+  currencyCode: string;
+  itemId: string;
+  bankData?: {
+    transferNumber?: string;
+    closingBalance?: number;
+  };
+  creditData?: {
+    level?: string;
+    brand?: string;
+    balanceCloseDate?: string;
+    balanceDueDate?: string;
+    availableCreditLimit?: number;
+    balanceForeignCurrency?: number;
+    minimumPayment?: number;
+    creditLimit?: number;
+  };
+}
+
+/**
+ * Busca transações de um item Pluggy via Edge Function.
+ * @param itemId - ID do item Pluggy (salvo em bank_connections.pluggy_item_id)
+ * @param options - Opções de filtro (accountId, from, to, pageSize)
+ */
+export async function getPluggyTransactions(
+  itemId: string,
+  options?: {
+    accountId?: string;
+    from?: string; // YYYY-MM-DD
+    to?: string; // YYYY-MM-DD
+    pageSize?: number;
+  }
+): Promise<{
+  transactions: PluggyTransaction[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const baseUrl = getSupabaseUrl();
+  if (!baseUrl) {
+    throw new Error('EXPO_PUBLIC_SUPABASE_URL não configurada.');
+  }
+
+  const url = `${baseUrl.replace(/\/$/, '')}/functions/v1/pluggy-transactions`;
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${anonKey}`,
+    },
+    body: JSON.stringify({
+      itemId,
+      accountId: options?.accountId,
+      from: options?.from,
+      to: options?.to,
+      pageSize: options?.pageSize,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err?.error || err?.message || `Erro ao buscar transações (${res.status})`);
+  }
+
+  const data = await res.json();
+  return {
+    transactions: data.transactions || [],
+    total: data.total || 0,
+    page: data.page || 1,
+    totalPages: data.totalPages || 1,
+  };
+}
+
+/**
+ * Busca contas (e saldo) de um item Pluggy via Edge Function.
+ * @param itemId - ID do item Pluggy (salvo em bank_connections.pluggy_item_id)
+ */
+export async function getPluggyAccounts(itemId: string): Promise<{
+  accounts: PluggyAccount[];
+  total: number;
+}> {
+  const baseUrl = getSupabaseUrl();
+  if (!baseUrl) {
+    throw new Error('EXPO_PUBLIC_SUPABASE_URL não configurada.');
+  }
+
+  const url = `${baseUrl.replace(/\/$/, '')}/functions/v1/pluggy-accounts`;
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${anonKey}`,
+    },
+    body: JSON.stringify({ itemId }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err?.error || err?.message || `Erro ao buscar contas (${res.status})`);
+  }
+
+  const data = await res.json();
+  return {
+    accounts: data.accounts || [],
+    total: data.total || 0,
+  };
+}

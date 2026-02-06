@@ -96,6 +96,7 @@ export default function CompaniesScreen() {
         console.error('❌ Erro ao buscar empresas:', error);
         setCompanies([]);
         setLoading(false);
+        showError('Não foi possível carregar as empresas', { iconType: 'company' });
         return;
       }
 
@@ -105,9 +106,10 @@ export default function CompaniesScreen() {
       } else {
         setCompanies([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erro ao carregar empresas:', error);
       setCompanies([]);
+      showError(error?.message || 'Erro ao carregar empresas', { iconType: 'company' });
     } finally {
       setLoading(false);
     }
@@ -223,19 +225,31 @@ export default function CompaniesScreen() {
         await atualizarEmpresa(editingCompany.id!, companyData);
         closeModal();
         await loadCompanies();
-        showSuccess('Empresa atualizada com sucesso!', { iconType: 'company' });
+        const displayName = nomeFantasia.trim() || razaoSocial.trim();
+        showSuccess(`Empresa atualizada: ${displayName}`, { 
+          iconType: 'company',
+          title: 'Dados salvos',
+          duration: 3500,
+        });
       } else {
         await criarEmpresa(companyData);
+        const displayName = nomeFantasia.trim() || razaoSocial.trim();
+        showSuccess(displayName ? `Empresa cadastrada: ${displayName}` : 'Nova empresa cadastrada', { 
+          iconType: 'company',
+          title: 'Nova empresa criada',
+          duration: 4000,
+        });
         closeModal();
         await loadCompanies();
-        showSuccess('Empresa criada com sucesso!', { iconType: 'company' });
       }
     } catch (error: any) {
       console.error('Erro ao salvar empresa:', error);
       const errorMessage = error.message || 'Erro ao salvar empresa';
       setModalError(errorMessage);
-      // Mostrar erro apenas dentro do modal, não na tela principal
-      // O erro já está sendo exibido via modalError no formulário
+      showError(errorMessage, { 
+        iconType: 'company',
+        title: editingCompany ? 'Erro ao atualizar' : 'Erro ao criar',
+      });
     }
   };
 
@@ -256,11 +270,19 @@ export default function CompaniesScreen() {
           onPress: async () => {
             try {
               await deletarEmpresa(company.id!);
-              showSuccess('Empresa excluída com sucesso!', { iconType: 'company' });
+              const displayName = company.nome_fantasia || company.razao_social;
+              showSuccess(`Empresa excluída: ${displayName}`, { 
+                iconType: 'company',
+                title: 'Empresa removida',
+                duration: 3500,
+              });
               await loadCompanies();
             } catch (error: any) {
               console.error('Erro ao deletar empresa:', error);
-              showError(error.message || 'Não foi possível excluir a empresa');
+              showError(error.message || 'Não foi possível excluir a empresa', { 
+                iconType: 'company',
+                title: 'Erro ao excluir',
+              });
             }
           },
         },

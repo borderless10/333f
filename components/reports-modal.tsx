@@ -24,6 +24,7 @@ import {
   type CashFlowReportData,
 } from '@/lib/services/reports';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotification } from '@/hooks/use-notification';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
 import { formatCurrency } from '@/lib/utils/currency';
 import * as FileSystem from 'expo-file-system';
@@ -40,6 +41,7 @@ type ReportType = 'reconciliation' | 'cashflow' | null;
 
 export function ReportsModal({ visible, onClose }: ReportsModalProps) {
   const { userId } = useAuth();
+  const { showSuccess, showError, showInfo } = useNotification();
   const insets = useSafeAreaInsets();
   const [selectedReport, setSelectedReport] = useState<ReportType>(null);
   const [loading, setLoading] = useState(false);
@@ -90,6 +92,10 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
         }
 
         setReconciliationData(data);
+        showSuccess('Relatório de conciliação gerado com sucesso!', { 
+          iconType: 'reconciliation',
+          duration: 3000,
+        });
       } else {
         const { data, error } = await generateCashFlowReport(
           userId,
@@ -103,10 +109,16 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
         }
 
         setCashFlowData(data);
+        showSuccess('Relatório de fluxo de caixa gerado com sucesso!', { 
+          iconType: 'export',
+          duration: 3000,
+        });
       }
     } catch (error: any) {
       console.error('Erro ao gerar relatório:', error);
-      // TODO: Mostrar toast de erro
+      showError(error?.message || 'Não foi possível gerar o relatório', { 
+        iconType: 'export' 
+      });
     } finally {
       setLoading(false);
     }
@@ -132,9 +144,21 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
 
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri);
+          showSuccess('Relatório exportado com sucesso!', { 
+            iconType: 'export',
+            duration: 3000,
+          });
+        } else {
+          showInfo('Arquivo salvo em: ' + fileUri, { 
+            iconType: 'export',
+            duration: 5000,
+          });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao exportar CSV:', error);
+        showError(error?.message || 'Não foi possível exportar o relatório', { 
+          iconType: 'export' 
+        });
       }
     }
   };

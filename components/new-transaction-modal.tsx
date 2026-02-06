@@ -149,6 +149,13 @@ export function NewTransactionModal({ visible, onClose, onSuccess, returnToHome 
       // Resetar loading IMEDIATAMENTE após sucesso
       setLoading(false);
       
+      // Mostrar notificação de sucesso com ícone e tipo correto
+      const tipoTexto = tipo === 'receita' ? 'Receita' : 'Despesa';
+      showSuccess(`${tipoTexto} criada com sucesso!`, { 
+        transactionType: tipo,
+        iconType: 'transaction'
+      });
+      
       // Guardar referência ao onSuccess e tipo antes de fechar
       const successCallback = onSuccess;
       const transactionType = tipo; // Guardar o tipo da transação criada

@@ -97,6 +97,7 @@ export default function TitlesScreen() {
       if (titlesResult.error) {
         console.error('❌ Erro ao buscar títulos:', titlesResult.error);
         setTitles([]);
+        showError('Não foi possível carregar os títulos', { iconType: 'title' });
       } else if (titlesResult.data) {
         console.log('✅ Títulos carregados:', titlesResult.data.length);
         setTitles(titlesResult.data);
@@ -110,10 +111,11 @@ export default function TitlesScreen() {
       } else {
         setContas([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erro ao carregar dados:', error);
       setTitles([]);
       setContas([]);
+      showError(error?.message || 'Erro ao carregar dados', { iconType: 'title' });
     } finally {
       setLoading(false);
     }
@@ -304,17 +306,30 @@ export default function TitlesScreen() {
 
       if (editingTitle) {
         await atualizarTitulo(editingTitle.id!, titleData);
-        showSuccess('Título atualizado com sucesso!', { iconType: 'title' });
+        const tipoTexto = tipo === 'pagar' ? 'Pagar' : 'Receber';
+        showSuccess(`Título a ${tipoTexto} atualizado: ${fornecedorCliente.trim()}`, { 
+          iconType: 'title',
+          title: 'Título atualizado',
+          duration: 3500,
+        });
       } else {
         await criarTitulo(titleData);
-        showSuccess('Título criado com sucesso!', { iconType: 'title' });
+        const tipoTexto = tipo === 'pagar' ? 'Pagar' : 'Receber';
+        const nome = fornecedorCliente.trim();
+        showSuccess(nome ? `Título a ${tipoTexto} criado: ${nome}` : `Título a ${tipoTexto} criado`, { 
+          iconType: 'title',
+          title: 'Novo título criado',
+          duration: 4000,
+        });
       }
 
       closeModal();
       await loadData();
     } catch (error: any) {
       console.error('Erro ao salvar título:', error);
-      setModalError(error.message || 'Erro ao salvar título');
+      const errorMsg = error.message || 'Erro ao salvar título';
+      setModalError(errorMsg);
+      showError(errorMsg, { iconType: 'title' });
     }
   };
 
@@ -332,11 +347,19 @@ export default function TitlesScreen() {
         title.conta_bancaria_id || undefined,
         selectedCompany?.id ?? null
       );
-      showSuccess('Título marcado como pago e transação criada!', { iconType: 'title' });
+      const tipoTexto = title.tipo === 'pagar' ? 'Pagar' : 'Receber';
+      showSuccess(`Título marcado como pago e transação criada`, { 
+        iconType: 'title',
+        title: `${tipoTexto}: ${title.fornecedor_cliente}`,
+        duration: 4000,
+      });
       await loadData();
     } catch (error: any) {
       console.error('Erro ao marcar como pago:', error);
-      showError(error.message || 'Não foi possível marcar como pago');
+      showError(error.message || 'Não foi possível marcar como pago', { 
+        iconType: 'title',
+        title: 'Erro ao marcar título',
+      });
     }
   };
 
@@ -356,11 +379,18 @@ export default function TitlesScreen() {
           onPress: async () => {
             try {
               await desmarcarTituloComoPago(title.id!);
-              showSuccess('Título desmarcado como pago!', { iconType: 'title' });
+              showSuccess(`Título desmarcado: ${title.fornecedor_cliente}`, { 
+                iconType: 'title',
+                title: 'Status alterado para Pendente',
+                duration: 3500,
+              });
               await loadData();
             } catch (error: any) {
               console.error('Erro ao desmarcar:', error);
-              showError(error.message || 'Não foi possível desmarcar');
+              showError(error.message || 'Não foi possível desmarcar o título', { 
+                iconType: 'title',
+                title: 'Erro ao alterar status',
+              });
             }
           },
         },
@@ -385,11 +415,19 @@ export default function TitlesScreen() {
           onPress: async () => {
             try {
               await deletarTitulo(title.id!);
-              showSuccess('Título excluído com sucesso!', { iconType: 'title' });
+              const tipoTexto = title.tipo === 'pagar' ? 'Pagar' : 'Receber';
+              showSuccess(`Título a ${tipoTexto} excluído: ${title.fornecedor_cliente}`, { 
+                iconType: 'title',
+                title: 'Título excluído',
+                duration: 3500,
+              });
               await loadData();
             } catch (error: any) {
               console.error('Erro ao deletar título:', error);
-              showError(error.message || 'Não foi possível excluir o título');
+              showError(error.message || 'Não foi possível excluir o título', { 
+                iconType: 'title',
+                title: 'Erro ao excluir',
+              });
             }
           },
         },

@@ -155,9 +155,11 @@ export default function BankConnectionsScreen() {
                 expiresAt
               );
               
-              showSuccess(`Consentimento renovado para ${connection.bank_name}`, {
+              const bankName = getBankByCode(connection.bank_code)?.name || connection.bank_name;
+              showSuccess(`Consentimento renovado com validade de 90 dias`, {
                 iconType: 'link',
-                title: 'Consentimento renovado',
+                title: bankName,
+                duration: 4000,
               });
               
               // Aguardar um pouco antes de recarregar para evitar race conditions
@@ -168,7 +170,11 @@ export default function BankConnectionsScreen() {
               }, 500);
             } catch (error: any) {
               console.error('Erro ao renovar consentimento:', error);
-              showError(error.message || 'Não foi possível renovar o consentimento', { iconType: 'link' });
+              const bankName = getBankByCode(connection.bank_code)?.name || connection.bank_name;
+              showError(error.message || 'Não foi possível renovar o consentimento', { 
+                iconType: 'link',
+                title: `Erro - ${bankName}`,
+              });
             } finally {
               setRenewing(null);
             }
@@ -200,9 +206,11 @@ export default function BankConnectionsScreen() {
               showInfo(`Revogando conexão com ${connection.bank_name}...`, { iconType: 'link', duration: 2000 });
               await revokeConsent(connection.id, userId);
               
-              showSuccess(`Consentimento revogado para ${connection.bank_name}`, {
+              const bankName = getBankByCode(connection.bank_code)?.name || connection.bank_name;
+              showSuccess(`Conexão revogada · Você pode reconectar a qualquer momento`, {
                 iconType: 'link',
-                title: 'Consentimento revogado',
+                title: `${bankName} desconectado`,
+                duration: 4500,
               });
               
               // Aguardar um pouco antes de recarregar para evitar race conditions
@@ -213,7 +221,11 @@ export default function BankConnectionsScreen() {
               }, 500);
             } catch (error: any) {
               console.error('Erro ao revogar consentimento:', error);
-              showError(error.message || 'Não foi possível revogar o consentimento', { iconType: 'link' });
+              const bankName = getBankByCode(connection.bank_code)?.name || connection.bank_name;
+              showError(error.message || 'Não foi possível revogar o consentimento', { 
+                iconType: 'link',
+                title: `Erro - ${bankName}`,
+              });
             }
           },
         },
@@ -224,49 +236,97 @@ export default function BankConnectionsScreen() {
   const handleImportTransactions = async (connection: OpenFinanceConnection) => {
     if (!userId) return;
 
+    // Verificar se tem pluggy_item_id
+    if (!connection.pluggy_item_id) {
+      showError('Esta conexão não possui um item Pluggy vinculado.', { iconType: 'link' });
+      return;
+    }
+
     setImporting(connection.id);
     const bankName = getBankByCode(connection.bank_code)?.name || connection.bank_name;
     showInfo(`Importando transações de ${bankName}...`, { iconType: 'link', duration: 2000 });
 
     try {
-      // TODO: Implementar busca real de transações da API
-      // Por enquanto, simular transações de exemplo
-      const mockTransactions: ImportedTransaction[] = [
+      // Buscar transações reais via Pluggy
+      const { getPluggyTransactions } = await import('@/lib/services/pluggy');
+      
+      // Buscar transações dos últimos 90 dias
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 90);
+      
+      const { transactions: pluggyTransactions } = await getPluggyTransactions(
+        connection.pluggy_item_id,
         {
-          bank_transaction_id: 'tx_001',
-          description: 'Transferência recebida',
-          amount: 1000.0,
-          date: new Date().toISOString().split('T')[0],
-          type: 'credit',
-          category: 'Transferência',
-        },
-        {
-          bank_transaction_id: 'tx_002',
-          description: 'Pagamento de fornecedor',
-          amount: -500.0,
-          date: new Date().toISOString().split('T')[0],
-          type: 'debit',
-          category: 'Fornecedores',
-        },
-      ];
+          from: startDate.toISOString().split('T')[0],
+          to: endDate.toISOString().split('T')[0],
+          pageSize: 500,
+        }
+      );
+
+      // Converter transações da Pluggy para o formato do sistema
+      const importedTransactions: ImportedTransaction[] = pluggyTransactions.map((tx) => ({
+        bank_transaction_id: tx.id,
+        description: tx.description || tx.descriptionRaw || 'Sem descrição',
+        amount: tx.type === 'CREDIT' ? Math.abs(tx.amount) : -Math.abs(tx.amount),
+        date: tx.date.split('T')[0], // YYYY-MM-DD
+        type: tx.type === 'CREDIT' ? 'credit' : 'debit',
+        category: tx.category,
+        balance: tx.balance,
+      }));
+
+      if (importedTransactions.length === 0) {
+        showInfo('Nenhuma transação encontrada no período.', { iconType: 'link' });
+        setImporting(null);
+        return;
+      }
 
       const result = await importTransactions(
         connection.id,
         userId,
-        mockTransactions,
+        importedTransactions,
         connection.conta_bancaria_id || undefined
       );
 
-      showSuccess(`${result.imported} transações importadas com sucesso!`, {
-        iconType: 'export',
-        title: 'Transações importadas',
-      });
+      if (result.imported > 0) {
+        showSuccess(`${result.imported} transações importadas de ${bankName}`, {
+          iconType: 'export',
+          title: 'Importação concluída',
+          duration: 4000,
+        });
+      }
+      
+      if (result.duplicates > 0) {
+        showInfo(`${result.duplicates} transações já existem no sistema e foram ignoradas`, {
+          iconType: 'link',
+          title: bankName,
+          duration: 4500,
+        });
+      }
+      
+      if (result.errors > 0) {
+        showInfo(`${result.errors} transações não puderam ser processadas`, {
+          iconType: 'link',
+          title: `${bankName} - Aviso`,
+          duration: 4500,
+        });
+      }
+
+      if (result.imported === 0 && result.duplicates === 0 && result.errors === 0) {
+        showInfo('Nenhuma transação nova encontrada no período de 90 dias', { 
+          iconType: 'link',
+          title: bankName,
+          duration: 3500,
+        });
+      }
+      
       setTimeout(() => {
         if (userId) {
           loadConnections();
         }
       }, 500);
     } catch (error: any) {
+      console.error('Erro ao importar transações:', error);
       showError(error.message || 'Não foi possível importar transações', { iconType: 'link' });
     } finally {
       setImporting(null);
@@ -276,32 +336,60 @@ export default function BankConnectionsScreen() {
   const handleImportBalance = async (connection: OpenFinanceConnection) => {
     if (!userId) return;
 
+    // Verificar se tem pluggy_item_id
+    if (!connection.pluggy_item_id) {
+      showError('Esta conexão não possui um item Pluggy vinculado.', { iconType: 'link' });
+      return;
+    }
+
     setImporting(connection.id);
     const bankName = getBankByCode(connection.bank_code)?.name || connection.bank_name;
     showInfo(`Importando saldo de ${bankName}...`, { iconType: 'link', duration: 2000 });
 
     try {
-      // TODO: Implementar busca real de saldo da API
-      const mockBalance = 5000.0;
+      // Buscar contas e saldo reais via Pluggy
+      const { getPluggyAccounts } = await import('@/lib/services/pluggy');
+      
+      const { accounts } = await getPluggyAccounts(connection.pluggy_item_id);
+
+      if (accounts.length === 0) {
+        showInfo('Nenhuma conta encontrada para esta conexão.', { iconType: 'link' });
+        setImporting(null);
+        return;
+      }
+
+      // Usar a primeira conta ou somar todos os saldos
+      const totalBalance = accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+      const primaryAccount = accounts[0];
 
       await importBalance(
         connection.id,
         userId,
-        mockBalance,
+        totalBalance,
         connection.conta_bancaria_id || undefined
       );
 
-      showSuccess('Saldo importado com sucesso!', {
+      const accountInfo = accounts.length > 1
+        ? `${accounts.length} contas · Saldo total: R$ ${totalBalance.toFixed(2)}`
+        : `R$ ${totalBalance.toFixed(2)}`;
+
+      showSuccess(accountInfo, {
         iconType: 'account',
-        title: 'Saldo importado',
+        title: `Saldo importado - ${bankName}`,
+        duration: 4500,
       });
+      
       setTimeout(() => {
         if (userId) {
           loadConnections();
         }
       }, 500);
     } catch (error: any) {
-      showError(error.message || 'Não foi possível importar saldo', { iconType: 'link' });
+      console.error('Erro ao importar saldo:', error);
+      showError(error.message || 'Não foi possível importar o saldo', { 
+        iconType: 'link',
+        title: `Erro - ${bankName}`,
+      });
     } finally {
       setImporting(null);
     }

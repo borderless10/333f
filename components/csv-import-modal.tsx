@@ -22,6 +22,7 @@ import { parseCSV, validateTransactionCSV, generateCSVTemplate, type ValidationR
 import { criarTransacao, type Transaction } from '@/lib/services/transactions';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotification } from '@/hooks/use-notification';
 import { formatCurrency } from '@/lib/utils/currency';
 import Toast from 'react-native-toast-message';
 import { toastConfig } from '@/components/NotificationToast';
@@ -34,6 +35,7 @@ interface CSVImportModalProps {
 
 export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalProps) {
   const { userId } = useAuth();
+  const { showSuccess, showError, showInfo } = useNotification();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'select' | 'preview' | 'importing'>('select');
@@ -84,8 +86,18 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
 
       setValidationResult(validation);
       setStep('preview');
+      
+      // Notificar se houver erros de validação
+      if (validation.invalidRows.length > 0) {
+        showInfo(`Arquivo carregado. ${validation.invalidRows.length} linhas com erro serão ignoradas.`, {
+          iconType: 'export',
+          duration: 4000,
+        });
+      } else {
+        showSuccess('Arquivo CSV validado com sucesso!', { iconType: 'export' });
+      }
     } catch (error: any) {
-      Alert.alert('Erro', 'Não foi possível ler o arquivo: ' + error.message);
+      showError('Não foi possível ler o arquivo: ' + error.message, { iconType: 'export' });
     } finally {
       setLoading(false);
     }
@@ -94,7 +106,10 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
   const handleDownloadTemplate = () => {
     const template = generateCSVTemplate();
     // TODO: Implementar download do template
-    Alert.alert('Template', 'Template copiado! Use este formato para criar seu CSV.');
+    showInfo('Template CSV: use este formato para criar seu arquivo.', { 
+      iconType: 'export',
+      duration: 4000,
+    });
   };
 
   const handleImport = async () => {
@@ -146,21 +161,31 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
     setImporting(false);
 
     if (successCount > 0) {
-      Alert.alert(
-        'Importação Concluída',
-        `${successCount} transações importadas com sucesso${errorCount > 0 ? `\n${errorCount} erros` : ''}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              onSuccess?.();
-              handleClose();
-            },
-          },
-        ]
+      showSuccess(
+        `${successCount} transações importadas com sucesso!${errorCount > 0 ? ` (${errorCount} erros)` : ''}`,
+        { 
+          iconType: 'export',
+          title: 'Importação concluída',
+          duration: 4000,
+        }
       );
+      onSuccess?.();
+      handleClose();
+      
+      if (errorCount > 0 && errors.length > 0) {
+        // Mostrar primeiros erros como informação adicional
+        setTimeout(() => {
+          const primeirosErros = errors.slice(0, 3).join('\n');
+          showInfo(`Erros encontrados:\n${primeirosErros}${errors.length > 3 ? '\n...' : ''}`, {
+            iconType: 'export',
+            duration: 6000,
+          });
+        }, 1000);
+      }
     } else {
-      Alert.alert('Erro', 'Nenhuma transação foi importada. Verifique os erros e tente novamente.');
+      showError('Nenhuma transação foi importada. Verifique os erros e tente novamente.', { 
+        iconType: 'export' 
+      });
     }
   };
 

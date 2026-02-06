@@ -77,7 +77,7 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const { selectedCompany } = useCompany();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
 
   // Animações
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -1160,6 +1160,11 @@ export default function DashboardScreen() {
               onPress={() => {
                 if (!reconciliationVisible) {
                   setReconciliationVisible(true);
+                  showInfo('Selecione uma transação (Banco) e um título (ERP) para conciliar', {
+                    iconType: 'reconciliation',
+                    title: 'Conciliação bancária aberta',
+                    duration: 3500,
+                  });
                 }
               }}
               activeOpacity={0.8}>

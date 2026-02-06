@@ -4,7 +4,7 @@
 
 | Sprint | Status | Concluído | Pendente |
 |--------|--------|-----------|----------|
-| **Sprint 1** | ~90% | Auth, perfis, empresas, Open Finance UI | API real (substituir mocks) |
+| **Sprint 1** | ~95% | Auth, perfis, empresas, Open Finance UI, **API real transações e saldo**, tratamento duplicatas | Renovação tokens, vinculação conta |
 | **Sprint 2** | ~95% | Tela conciliação, matching, desfazer, histórico | Polimento e ajustes |
 | **Sprint 3** | ~85% | Títulos, CSV, relatórios, dashboard | Integrar relatórios com dados reais |
 | **Sprint 4** | ~70% | Permissões, export CSV | Associação usuário×empresa, export PDF |
@@ -17,21 +17,23 @@
 - Módulo de autenticação e perfis (Admin / Analista / Viewer)
 - Cadastro de empresas (CNPJ/Grupo)
 - Criar/renovar/revogar consentimento (UI)
-- Importar transações e saldos (manual, mock)
 - Logs de integração
 - Integração Pluggy (Connect Widget)
+- ✅ **Integração real de transações** – busca transações via API Pluggy (últimos 90 dias)
+- ✅ **Integração real de saldo** – busca saldo via API Pluggy
+- ✅ **Tratamento de duplicatas** – verifica por `bank_transaction_id` e por valor+data+descrição
 
 ### ⏱️ Pendências e Horas
 
-| # | Tarefa | Horas | Prioridade |
-|---|--------|-------|------------|
-| 1.1 | **Integração real de transações** – trocar mock por API Pluggy em `handleImportTransactions` | **3h** | 🔴 Alta |
-| 1.2 | **Integração real de saldo** – trocar mock por API Pluggy em `handleImportBalance` | **2h** | 🔴 Alta |
-| 1.3 | **Renovação automática de tokens** – verificar expiração e renovar via Pluggy | **3h** | 🟡 Média |
-| 1.4 | **Tratamento de duplicatas** na importação de transações | **2h** | 🟡 Média |
-| 1.5 | **Vinculação conta bancária** – associar conta do Open Finance à conta manual no cadastro | **2h** | 🟢 Baixa |
+| # | Tarefa | Horas | Prioridade | Status |
+|---|--------|-------|------------|--------|
+| 1.1 | ~~**Integração real de transações** – trocar mock por API Pluggy em `handleImportTransactions`~~ | ~~**3h**~~ | ✅ Concluído | ✅ |
+| 1.2 | ~~**Integração real de saldo** – trocar mock por API Pluggy em `handleImportBalance`~~ | ~~**2h**~~ | ✅ Concluído | ✅ |
+| 1.3 | **Renovação automática de tokens** – verificar expiração e renovar via Pluggy | **3h** | 🟡 Média | ⏳ |
+| 1.4 | ~~**Tratamento de duplicatas** na importação de transações~~ | ~~**2h**~~ | ✅ Concluído | ✅ |
+| 1.5 | **Vinculação conta bancária** – associar conta do Open Finance à conta manual no cadastro | **2h** | 🟢 Baixa | ⏳ |
 
-**Total Sprint 1:** **12h**
+**Total Sprint 1 restante:** **5h** (1.3 + 1.5)
 
 ---
 
@@ -105,34 +107,34 @@
 
 ## 📊 Resumo Geral de Horas
 
-| Sprint | Horas | Objetivo principal |
-|--------|-------|--------------------|
-| **Sprint 1** | 12h | Dados bancários reais via Pluggy |
-| **Sprint 2** | 6h | Polimento da conciliação |
-| **Sprint 3** | 8h | Relatórios e visão por empresa |
-| **Sprint 4** | 14h | Multiusuário e associação empresa×usuário |
-| **TOTAL** | **40h** | |
+| Sprint | Horas Original | Horas Restantes | Concluído |
+|--------|----------------|-----------------|-----------|
+| **Sprint 1** | 12h | **5h** | ✅ 7h (transações + saldo + duplicatas) |
+| **Sprint 2** | 6h | 6h | ⏳ |
+| **Sprint 3** | 8h | 8h | ⏳ |
+| **Sprint 4** | 14h | 14h | ⏳ |
+| **TOTAL** | **40h** | **33h** | **7h concluídas** |
 
 ---
 
 ## 🎯 Ordem Recomendada de Implementação
 
-### Fase 1 – Crítico (17h)
-1. **1.1** Integração real transações – **3h**
-2. **1.2** Integração real saldo – **2h**
-3. **2.1** Seção sobras/faltas – **2h**
+### Fase 1 – Crítico (10h restantes)
+1. ~~**1.1** Integração real transações – **3h**~~ ✅ Concluído
+2. ~~**1.2** Integração real saldo – **2h**~~ ✅ Concluído
+3. **2.1** Seção sobras/faltas – **2h** (já existe seção, mas pode precisar refinamento)
 4. **4.1** Interface associação usuário×empresas – **4h**
 5. **4.2** Tabela e lógica de associação – **2h**
-6. **3.1** Relatório conciliado x não conciliado – **3h**
-7. **4.3** Filtrar dados por empresa – **1h**
+6. **3.1** Relatório conciliado x não conciliado – **3h** (já existe, precisa integrar melhor)
+7. **4.3** Filtrar dados por empresa – **1h** (parcialmente feito, precisa user_empresas)
 
-### Fase 2 – Importante (13h)
+### Fase 2 – Importante (10,5h restantes)
 8. **1.3** Renovação automática tokens – **3h**
 9. **3.2** Fluxo de caixa refinado – **2h**
 10. **3.3** Cards conciliação no dashboard – **2h**
 11. **4.4** Exportação PDF – **4h**
 12. **2.2** Filtro por período na conciliação – **1,5h**
-13. **1.4** Tratamento duplicatas – **0,5h** (estimativa ajustada)
+13. ~~**1.4** Tratamento duplicatas – **2h**~~ ✅ Concluído
 
 ### Fase 3 – Refinamentos (10h)
 14. **2.3** Badge pendente – **1h**
@@ -146,12 +148,14 @@
 
 ## ✅ Checklist Rápido
 
-- [ ] **Sprint 1:** Transações e saldo reais via Pluggy
-- [ ] **Sprint 2:** Seção sobras/faltas e filtros
-- [ ] **Sprint 3:** Relatórios integrados e cards
-- [ ] **Sprint 4:** Associação usuário×empresa e PDF
+- [x] **Sprint 1 (parcial):** ✅ Transações e saldo reais via Pluggy + tratamento duplicatas (7h concluídas)
+- [ ] **Sprint 1 (restante):** Renovação tokens + vinculação conta (5h restantes)
+- [ ] **Sprint 2:** Filtros por período e ajustes UX (6h)
+- [ ] **Sprint 3:** Relatórios integrados e cards por empresa (8h)
+- [ ] **Sprint 4:** Associação usuário×empresa e PDF (14h)
 
 ---
 
-**Última atualização:** 03/02/2025  
-**Baseado em:** estado atual do código e demandas do projeto
+**Última atualização:** 06/02/2026  
+**Baseado em:** estado atual do código e demandas do projeto  
+**Sprint 1 (1.1 + 1.2 + 1.4):** ✅ **CONCLUÍDO** – Integração real Pluggy implementada com sucesso!

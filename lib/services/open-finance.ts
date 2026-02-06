@@ -428,25 +428,61 @@ export async function revokeConsent(
 }
 
 /**
- * Importa transações de uma conexão bancária
- * Esta função simula a importação - você precisará integrar com a API real
+ * Importa transações de uma conexão bancária com verificação de duplicatas
  */
 export async function importTransactions(
   connectionId: string,
   userId: string,
   transactions: ImportedTransaction[],
   contaBancariaId?: number
-): Promise<{ imported: number; errors: number }> {
+): Promise<{ imported: number; errors: number; duplicates: number }> {
   let imported = 0;
   let errors = 0;
+  let duplicates = 0;
 
   try {
     for (const bankTx of transactions) {
       try {
-        // Converter tipo do banco para tipo do sistema
+        // 1. Verificar se já existe transação com esse bank_transaction_id
+        const { data: existingById, error: checkError } = await supabase
+          .from('transacoes')
+          .select('id')
+          .eq('bank_transaction_id', bankTx.bank_transaction_id)
+          .eq('codigo_empresa', userId)
+          .maybeSingle();
+
+        if (checkError) {
+          console.error('Erro ao verificar duplicata por ID:', checkError);
+        }
+
+        if (existingById) {
+          duplicates++;
+          continue; // Pular transação duplicada
+        }
+
+        // 2. Verificar duplicata por valor + data + descrição (fallback)
+        const { data: existingByData, error: checkError2 } = await supabase
+          .from('transacoes')
+          .select('id')
+          .eq('codigo_empresa', userId)
+          .eq('valor', Math.abs(bankTx.amount))
+          .eq('data', bankTx.date)
+          .eq('descricao', bankTx.description)
+          .maybeSingle();
+
+        if (checkError2) {
+          console.error('Erro ao verificar duplicata por dados:', checkError2);
+        }
+
+        if (existingByData) {
+          duplicates++;
+          continue; // Pular transação duplicada
+        }
+
+        // 3. Converter tipo do banco para tipo do sistema
         const tipo = bankTx.type === 'credit' ? 'receita' : 'despesa';
 
-        // Criar transação no sistema
+        // 4. Criar transação no sistema
         const transaction: Omit<Transaction, 'id' | 'created_at' | 'updated_at'> = {
           codigo_empresa: userId,
           descricao: bankTx.description,
@@ -455,6 +491,7 @@ export async function importTransactions(
           tipo,
           categoria: bankTx.category || 'Importado do Banco',
           conta_bancaria_id: contaBancariaId || null,
+          bank_transaction_id: bankTx.bank_transaction_id, // Salvar ID do banco
         };
 
         await criarTransacao(transaction);
@@ -473,11 +510,11 @@ export async function importTransactions(
     // Registrar log
     await logIntegrationOperation(userId, 'sync_transactions', 'success', {
       connectionId,
-      message: `${imported} transações importadas`,
-      metadata: { imported, errors, total: transactions.length },
+      message: `${imported} transações importadas, ${duplicates} duplicadas, ${errors} com erro`,
+      metadata: { imported, duplicates, errors, total: transactions.length },
     });
 
-    return { imported, errors };
+    return { imported, errors, duplicates };
   } catch (error: any) {
     await logIntegrationOperation(userId, 'sync_transactions', 'error', {
       connectionId,

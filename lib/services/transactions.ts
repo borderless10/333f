@@ -12,6 +12,7 @@ export interface Transaction {
   tipo: 'receita' | 'despesa';
   categoria: string;
   conta_bancaria_id?: number | null;
+  bank_transaction_id?: string | null; // ID da transação no banco (Pluggy) para evitar duplicatas
   created_at?: string;
   updated_at?: string;
 }

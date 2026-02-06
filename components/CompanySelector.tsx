@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCompany } from '@/contexts/CompanyContext';
+import { useNotification } from '@/hooks/use-notification';
 import { type Company } from '@/lib/services/companies';
 import { AnimatedBackground } from './animated-background';
 import { GlassContainer } from './glass-container';
@@ -21,6 +22,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 export function CompanySelector() {
   const insets = useSafeAreaInsets();
   const { selectedCompany, companies, setSelectedCompany, loading } = useCompany();
+  const { showSuccess, showInfo } = useNotification();
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
@@ -65,14 +67,31 @@ export function CompanySelector() {
 
   // Seleciona uma empresa
   const handleSelectCompany = async (company: Company) => {
+    const previousCompany = selectedCompany;
     await setSelectedCompany(company);
     closeModal();
+    
+    // Notificar mudança de empresa
+    const companyName = company.nome_fantasia || company.razao_social;
+    if (previousCompany?.id !== company.id) {
+      showSuccess(`Empresa alterada: ${companyName}`, { 
+        iconType: 'company',
+        title: 'Empresa selecionada',
+        duration: 3000,
+      });
+    }
   };
 
   // Limpa seleção
   const handleClearSelection = async () => {
     await setSelectedCompany(null);
     closeModal();
+    
+    // Notificar limpeza de seleção
+    showInfo('Visualizando todas as empresas', { 
+      iconType: 'company',
+      duration: 2500,
+    });
   };
 
   const displayName = selectedCompany?.nome_fantasia || selectedCompany?.razao_social || 'Selecionar Empresa';

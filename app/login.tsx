@@ -1,17 +1,18 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useState } from 'react';
 import {
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,6 +22,47 @@ import { ThemedText } from '@/components/themed-text';
 import { PasswordInput } from '@/components/ui/password-input';
 import { TELOS_LOGO } from '@/lib/assets';
 import { supabase } from '@/lib/supabase';
+
+// Necessário para o fluxo OAuth no browser fechar ao retornar ao app
+WebBrowser.maybeCompleteAuthSession();
+
+/**
+ * Extrai access_token e refresh_token da URL de redirect do OAuth (hash # ou query ?).
+ * Supabase envia os tokens no fragmento da URL após o login social.
+ */
+function parseSessionFromUrl(url: string): { access_token?: string; refresh_token?: string; error?: string } {
+  try {
+    const hashIdx = url.indexOf('#');
+    const queryIdx = url.indexOf('?');
+    const fragment = hashIdx >= 0 ? url.substring(hashIdx + 1) : '';
+    const query = queryIdx >= 0 ? url.substring(queryIdx + 1) : '';
+    const paramsStr = fragment || query;
+    if (!paramsStr) return {};
+    const params = new URLSearchParams(paramsStr);
+    const error = params.get('error_description') || params.get('error') || undefined;
+    return {
+      access_token: params.get('access_token') || undefined,
+      refresh_token: params.get('refresh_token') || undefined,
+      error,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Cria sessão no Supabase a partir da URL de callback do OAuth (após Google/Microsoft).
+ */
+async function createSessionFromUrl(url: string): Promise<void> {
+  const { access_token, refresh_token, error } = parseSessionFromUrl(url);
+  if (error) throw new Error(error);
+  if (!access_token || !refresh_token) return;
+  const { error: sessionError } = await supabase.auth.setSession({
+    access_token,
+    refresh_token,
+  });
+  if (sessionError) throw sessionError;
+}
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -127,40 +169,51 @@ export default function LoginScreen() {
     }
   };
 
-  const handleSocialLogin = async (provider: 'google' | 'microsoft') => {
+  const handleGoogleLogin = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // URL de retorno para o app (usa o scheme configurado no app.json)
+      // URL de retorno para o app (scheme do app.json: 333f). Deve estar em Supabase → Auth → URL Configuration → Redirect URLs
       const redirectTo = Linking.createURL('/');
 
-      const supabaseProvider = provider === 'google' ? 'google' : 'azure';
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: supabaseProvider as 'google' | 'azure',
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
         options: {
           redirectTo,
+          skipBrowserRedirect: true, // Abrimos o browser manualmente e tratamos o retorno
         },
       });
 
-      if (error) {
-        let mensagemErro = 'Erro ao iniciar login social.';
-
-        if (error.message.includes('redirect')) {
-          mensagemErro =
-            'Erro de redirecionamento. Verifique a URL de callback configurada no Supabase.';
-        } else {
-          mensagemErro = error.message || mensagemErro;
-        }
-
+      if (oauthError) {
+        const mensagemErro =
+          oauthError.message.includes('redirect')
+            ? 'Configure as URLs de redirecionamento no Supabase (Auth → URL Configuration).'
+            : oauthError.message || 'Erro ao iniciar login social.';
         setError(mensagemErro);
-      } else {
-        console.log(`🌐 Login ${provider} iniciado. Aguarde o retorno ao app.`);
+        return;
       }
-    } catch (err) {
-      console.error(`❌ Erro inesperado no login ${provider}:`, err);
-      setError(`Erro inesperado ao fazer login com ${provider}. Tente novamente.`);
+
+      const authUrl = data?.url;
+      if (!authUrl) {
+        setError('Não foi possível obter a URL de login. Tente novamente.');
+        return;
+      }
+
+      // Abre o browser para o usuário fazer login no Google; ao concluir, o app recebe o redirect
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo);
+
+      if (result.type === 'success' && result.url) {
+        await createSessionFromUrl(result.url);
+        // Redirecionamento para (tabs) ocorre automaticamente pelo _layout ao detectar user
+      } else if (result.type === 'cancel') {
+        setError('Login cancelado.');
+      } else if (result.type === 'dismiss') {
+        // Usuário fechou o browser sem concluir; não exibir erro se foi intencional
+      }
+    } catch (err: any) {
+      console.error('❌ Erro no login com Google:', err);
+      setError(err?.message || 'Erro ao fazer login com Google. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -257,27 +310,14 @@ export default function LoginScreen() {
                   <View style={styles.separatorLine} />
                 </View>
 
-                {/* Social Login Buttons */}
+                {/* Login com Google */}
                 <View style={styles.socialButtons}>
                   <TouchableOpacity
                     style={styles.socialButton}
-                    onPress={() => handleSocialLogin('google')}
+                    onPress={handleGoogleLogin}
                     activeOpacity={0.7}>
                     <MaterialIcons name="email" size={20} color="#FFFFFF" />
-                    <Text style={styles.socialButtonText}>Google</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.socialButton}
-                    onPress={() => handleSocialLogin('microsoft')}
-                    activeOpacity={0.7}>
-                    <View style={styles.microsoftLogo}>
-                      <View style={[styles.microsoftSquare, { backgroundColor: '#F25022' }]} />
-                      <View style={[styles.microsoftSquare, { backgroundColor: '#7FBA00' }]} />
-                      <View style={[styles.microsoftSquare, { backgroundColor: '#00A4EF' }]} />
-                      <View style={[styles.microsoftSquare, { backgroundColor: '#FFB900' }]} />
-                    </View>
-                    <Text style={styles.socialButtonText}>Microsoft</Text>
+                    <Text style={styles.socialButtonText}>Entrar com Google</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -435,16 +475,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#FFFFFF',
-  },
-  microsoftLogo: {
-    width: 20,
-    height: 20,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  microsoftSquare: {
-    width: 9,
-    height: 9,
-    margin: 0.5,
   },
 });

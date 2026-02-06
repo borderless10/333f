@@ -44,7 +44,7 @@ interface ReconciliationModalProps {
 export function ReconciliationModal({ visible, onClose, onSuccess }: ReconciliationModalProps) {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
-  const { showSuccess, showError, showInfo } = useNotification();
+  const { showSuccess, showError } = useNotification();
 
   const [transactions, setTransactions] = useState<TransactionWithAccount[]>([]);
   const [titles, setTitles] = useState<TitleWithAccount[]>([]);
@@ -56,6 +56,7 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [filterAccount, setFilterAccount] = useState<number | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [matchWasRunWithZeroSuggestions, setMatchWasRunWithZeroSuggestions] = useState(false);
 
   // Animações
   const leftColumnAnim = useRef(new Animated.Value(0)).current;
@@ -84,6 +85,7 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
       setFilterAccount(null);
       setLoading(false);
       setMatching(false);
+      setMatchWasRunWithZeroSuggestions(false);
     }
   }, [visible, userId]);
 
@@ -234,12 +236,7 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
       if (visible) {
         const suggestionsList = matches || [];
         setSuggestions(suggestionsList);
-
-        if (suggestionsList.length === 0) {
-          showInfo('Nenhuma sugestão encontrada. Tente conciliar manualmente selecionando uma transação e um título nas colunas.', {
-            duration: 3500,
-          });
-        }
+        setMatchWasRunWithZeroSuggestions(suggestionsList.length === 0);
 
         // Resetar e animar SEM callbacks
         try {
@@ -289,8 +286,10 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
         const transactionDesc = transaction?.descricao || 'Transação';
         const titleDesc = title?.fornecedor_cliente || 'Título';
         
-        showSuccess(`Conciliação realizada: ${transactionDesc} ↔ ${titleDesc}`, {
+        showSuccess(`${transactionDesc} ↔ ${titleDesc}`, {
           iconType: isAutoMatch ? 'auto_match' : 'reconciliation',
+          title: 'Nova conciliação registrada',
+          duration: 4000,
         });
         
         setSelectedTransaction(null);
@@ -453,6 +452,23 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* Aviso quando não há sugestões de match (só na tela de conciliação) */}
+          {!loading && !matching && matchWasRunWithZeroSuggestions && suggestions.length === 0 && (
+            <View style={styles.noSuggestionsBanner}>
+              <View style={styles.noSuggestionsIconWrap}>
+                <MaterialIcons name="info-outline" size={24} color="#3B82F6" />
+              </View>
+              <View style={styles.noSuggestionsTextWrap}>
+                <ThemedText type="defaultSemiBold" style={styles.noSuggestionsTitle}>
+                  Nenhuma sugestão encontrada
+                </ThemedText>
+                <ThemedText style={styles.noSuggestionsMessage}>
+                  Tente conciliar manualmente: selecione uma transação na coluna da esquerda (Banco) e um título na coluna da direita (ERP), depois toque em Conciliar.
+                </ThemedText>
+              </View>
+            </View>
+          )}
 
           {/* Seção Sobras e Faltas */}
           {!loading && (
@@ -1133,6 +1149,41 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  // Banner: nenhuma sugestão (só na tela de conciliação)
+  noSuggestionsBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.4)',
+  },
+  noSuggestionsIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noSuggestionsTextWrap: {
+    flex: 1,
+  },
+  noSuggestionsTitle: {
+    fontSize: 14,
+    color: '#93C5FD',
+    marginBottom: 4,
+  },
+  noSuggestionsMessage: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 19,
   },
   // Seção Sobras e Faltas
   sobrasFaltasSection: {
