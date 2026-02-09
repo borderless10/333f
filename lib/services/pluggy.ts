@@ -203,3 +203,58 @@ export async function getPluggyAccounts(itemId: string): Promise<{
     total: data.total || 0,
   };
 }
+
+/**
+ * Interface para resultado da verificação de status do item Pluggy
+ */
+export interface PluggyItemStatusResult {
+  status: 'UPDATED' | 'UPDATING' | 'WAITING_USER_INPUT' | 'LOGIN_ERROR' | 'OUTDATED';
+  needsUpdate: boolean;
+  renewed: boolean;
+  needsUserAction: boolean;
+  message?: string;
+  lastUpdatedAt?: string;
+}
+
+/**
+ * Verifica o status de um item Pluggy e opcionalmente renova automaticamente
+ * @param itemId - ID do item Pluggy
+ * @param autoRenew - Se true, tenta renovar automaticamente se estiver desatualizado
+ */
+export async function checkAndRenewPluggyItem(
+  itemId: string,
+  autoRenew: boolean = true
+): Promise<PluggyItemStatusResult> {
+  const baseUrl = getSupabaseUrl();
+  if (!baseUrl) {
+    throw new Error('EXPO_PUBLIC_SUPABASE_URL não configurada.');
+  }
+
+  const url = `${baseUrl.replace(/\/$/, '')}/functions/v1/pluggy-item-status`;
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${anonKey}`,
+    },
+    body: JSON.stringify({ itemId, autoUpdate: autoRenew }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err?.error || err?.message || `Erro ao verificar status (${res.status})`);
+  }
+
+  const data = await res.json();
+  
+  return {
+    status: data.status?.status || 'OUTDATED',
+    needsUpdate: data.needsUpdate || false,
+    renewed: data.updated || false,
+    needsUserAction: data.status?.status === 'LOGIN_ERROR' || data.status?.status === 'WAITING_USER_INPUT',
+    message: data.message,
+    lastUpdatedAt: data.status?.lastUpdatedAt,
+  };
+}

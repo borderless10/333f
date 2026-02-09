@@ -11,6 +11,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { PermissionsProvider } from '@/contexts/PermissionsContext';
 import { CompanyProvider } from '@/contexts/CompanyContext';
+import { useTokenRenewal } from '@/hooks/use-token-renewal';
 import Toast from 'react-native-toast-message';
 import { toastConfig } from '@/components/NotificationToast';
 
@@ -22,6 +23,13 @@ function RootLayoutNav() {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  // Hook de renovação automática de tokens (roda globalmente quando usuário está logado)
+  useTokenRenewal({
+    checkInterval: 30 * 60 * 1000, // Verificar a cada 30 minutos
+    autoRenew: true,
+    checkOnMount: true,
+  });
 
   useEffect(() => {
     if (loading) return; // Aguarda carregamento inicial

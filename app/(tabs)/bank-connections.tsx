@@ -33,6 +33,7 @@ import {
 import { getBankByCode } from '@/lib/services/bank-integrations';
 import { NewConnectionModal } from '@/components/new-connection-modal';
 import { IntegrationLogsModal } from '@/components/integration-logs-modal';
+import { LinkAccountModal } from '@/components/link-account-modal';
 import { formatCurrency } from '@/lib/utils/currency';
 
 export default function BankConnectionsScreen() {
@@ -45,6 +46,7 @@ export default function BankConnectionsScreen() {
   const [loading, setLoading] = useState(true);
   const [newConnectionVisible, setNewConnectionVisible] = useState(false);
   const [logsVisible, setLogsVisible] = useState(false);
+  const [linkAccountVisible, setLinkAccountVisible] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<OpenFinanceConnection | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [renewing, setRenewing] = useState<string | null>(null);
@@ -518,6 +520,15 @@ export default function BankConnectionsScreen() {
                     </View>
                   )}
 
+                  {connection.conta_bancaria_id && (
+                    <View style={styles.linkedAccountInfo}>
+                      <IconSymbol name="link.circle.fill" size={14} color="#00b09b" />
+                      <ThemedText style={styles.linkedAccountText}>
+                        Vinculada à conta manual
+                      </ThemedText>
+                    </View>
+                  )}
+
                   {expired && connection.status === 'active' && (
                     <View style={styles.warningBanner}>
                       <IconSymbol name="exclamationmark.triangle.fill" size={16} color="#FBBF24" />
@@ -586,6 +597,18 @@ export default function BankConnectionsScreen() {
                       style={styles.actionButton}
                       onPress={() => {
                         setSelectedConnection(connection);
+                        setLinkAccountVisible(true);
+                      }}
+                      activeOpacity={0.7}>
+                      <IconSymbol name="link.circle" size={16} color="#8B5CF6" />
+                      <Text style={[styles.actionButtonText, { color: '#8B5CF6' }]}>
+                        {connection.conta_bancaria_id ? 'Alterar Conta' : 'Vincular Conta'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => {
+                        setSelectedConnection(connection);
                         setLogsVisible(true);
                       }}
                       activeOpacity={0.7}>
@@ -634,6 +657,22 @@ export default function BankConnectionsScreen() {
           setSelectedConnection(null);
         }}
         connectionId={selectedConnection?.id}
+      />
+
+      <LinkAccountModal
+        visible={linkAccountVisible}
+        connection={selectedConnection}
+        onClose={() => {
+          setLinkAccountVisible(false);
+          setSelectedConnection(null);
+        }}
+        onSuccess={() => {
+          setTimeout(() => {
+            if (userId) {
+              loadConnections();
+            }
+          }, 500);
+        }}
       />
     </View>
   );
@@ -757,6 +796,20 @@ const styles = StyleSheet.create({
   syncText: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.6)',
+  },
+  linkedAccountInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  linkedAccountText: {
+    fontSize: 12,
+    color: '#00b09b',
+    fontWeight: '600',
   },
   warningBanner: {
     flexDirection: 'row',
