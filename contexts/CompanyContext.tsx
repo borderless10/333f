@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buscarEmpresas, type Company } from '@/lib/services/companies';
+import { buscarEmpresasUsuario, type EmpresaComRole } from '@/lib/services/user-empresas';
 import { useAuth } from './AuthContext';
 
 interface CompanyContextData {
@@ -23,7 +24,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   /**
-   * Carrega todas as empresas do usuário
+   * Carrega empresas do usuário
+   * Tenta primeiro buscar por associação (user_empresas)
+   * Se falhar ou retornar vazio, busca empresas diretas (codigo_empresa = userId)
    */
   const loadCompanies = useCallback(async () => {
     if (!userId) {
@@ -34,6 +37,37 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
     try {
       setLoading(true);
+      
+      // Tenta buscar empresas associadas via user_empresas primeiro
+      try {
+        const empresasAssociadas = await buscarEmpresasUsuario(false);
+        
+        if (empresasAssociadas && empresasAssociadas.length > 0) {
+          // Converter EmpresaComRole para Company
+          const empresasConvertidas: Company[] = empresasAssociadas.map(e => ({
+            id: e.id,
+            codigo_empresa: e.codigo_empresa,
+            empresa_telos_id: e.empresa_telos_id,
+            razao_social: e.razao_social,
+            nome_fantasia: e.nome_fantasia,
+            cnpj: e.cnpj,
+            ativa: e.ativa && e.associacao_ativa,
+            created_at: e.created_at,
+          }));
+          
+          setCompanies(empresasConvertidas);
+          setLoading(false);
+          return;
+        }
+        
+        // Se retornou array vazio, continua para fallback
+        console.log('Nenhuma empresa associada encontrada via user_empresas, usando fallback...');
+      } catch (error: any) {
+        // Se falhar (ex: função não existe), continua para fallback
+        console.log('Busca via user_empresas não disponível, usando fallback...');
+      }
+
+      // Fallback: busca empresas diretas onde codigo_empresa = userId
       const { data, error } = await buscarEmpresas(userId, { ativa: true });
 
       if (error) {

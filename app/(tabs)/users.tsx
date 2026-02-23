@@ -5,6 +5,7 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { UserCompanyModal } from '@/components/user-company-modal';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
@@ -63,6 +64,10 @@ export default function UsersScreen() {
   const [newUserRole, setNewUserRole] = useState<UserRole>('viewer');
   const [creatingUser, setCreatingUser] = useState(false);
   const [newUserModalError, setNewUserModalError] = useState('');
+  
+  // Modal de empresas do usuário
+  const [companyModalVisible, setCompanyModalVisible] = useState(false);
+  const [selectedUserForCompanies, setSelectedUserForCompanies] = useState<UserWithProfile | null>(null);
 
   useEffect(() => {
     // Só carrega se o usuário estiver autenticado
@@ -484,6 +489,18 @@ export default function UsersScreen() {
                             </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
+                            onPress={() => {
+                              setSelectedUserForCompanies(user);
+                              setCompanyModalVisible(true);
+                            }}
+                            style={[styles.actionButton, styles.actionButtonPurple]}
+                            activeOpacity={0.7}>
+                            <IconSymbol name="building.2.fill" size={16} color="#8B5CF6" />
+                            <Text style={[styles.actionButtonText, { color: '#8B5CF6' }]}>
+                              Empresas
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
                             onPress={() => handleRemoveProfile(user)}
                             style={[styles.actionButton, styles.actionButtonDanger]}
                             activeOpacity={0.7}>
@@ -871,6 +888,20 @@ export default function UsersScreen() {
             <Toast config={toastConfig} topOffset={60} />
           </View>
         </Modal>
+
+        {/* Modal de Empresas do Usuário */}
+        <UserCompanyModal
+          visible={companyModalVisible}
+          user={selectedUserForCompanies}
+          onClose={() => {
+            setCompanyModalVisible(false);
+            setSelectedUserForCompanies(null);
+          }}
+          onSuccess={() => {
+            // Opcional: recarregar usuários se necessário
+            loadUsers();
+          }}
+        />
       </View>
     </ProtectedRoute>
   );
@@ -1221,5 +1252,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  actionButtonPurple: {
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
   },
 });
