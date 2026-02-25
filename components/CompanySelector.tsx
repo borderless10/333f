@@ -107,7 +107,7 @@ export function CompanySelector() {
           <MaterialIcons name="business" size={18} color="#00b09b" />
           <View style={styles.selectorTextContainer}>
             <ThemedText style={styles.selectorLabel} numberOfLines={1}>Empresa</ThemedText>
-            <ThemedText style={styles.selectorName} numberOfLines={1} ellipsizeMode="tail">
+            <ThemedText style={styles.selectorName} numberOfLines={1}>
               {displayName}
             </ThemedText>
           </View>
@@ -287,21 +287,19 @@ const styles = StyleSheet.create({
   selectorContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
     backgroundColor: 'rgba(0, 176, 155, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(0, 176, 155, 0.3)',
     minWidth: 90,
-    maxWidth: 140,
+    flexShrink: 0,
   },
   selectorTextContainer: {
-    flex: 1,
-    marginLeft: 2,
-    minWidth: 0, // Permite truncamento
-    maxWidth: 100,
+    marginLeft: 0,
+    flexShrink: 0,
   },
   selectorLabel: {
     fontSize: 9,

@@ -103,6 +103,12 @@ const CustomToast = ({ type, text1, text2, onPress, props }: any) => {
   const linkColor = '#00b09b';
   const linkBg = 'rgba(0, 176, 155, 0.25)';
 
+  // Se for uma notificação de empresas de usuário
+  const isUserCompany = iconType === 'user_company';
+  const userCompanyIcon = 'building.2.fill';
+  const userCompanyColor = '#8B5CF6';
+  const userCompanyBg = 'rgba(139, 92, 246, 0.25)';
+
   // Se for uma notificação de conciliação
   const isReconciliation = iconType === 'reconciliation';
   const reconciliationIcon = 'checkmark.circle.fill';
@@ -156,6 +162,11 @@ const CustomToast = ({ type, text1, text2, onPress, props }: any) => {
     iconColor = linkColor;
     iconBg = linkBg;
     borderColor = linkColor;
+  } else if (isUserCompany) {
+    iconName = userCompanyIcon;
+    iconColor = userCompanyColor;
+    iconBg = userCompanyBg;
+    borderColor = userCompanyColor;
   } else if (isReconciliation) {
     iconName = reconciliationIcon;
     iconColor = reconciliationColor;

@@ -57,11 +57,14 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
   const [filterAccount, setFilterAccount] = useState<number | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [matchWasRunWithZeroSuggestions, setMatchWasRunWithZeroSuggestions] = useState(false);
+  const [sobrasExpanded, setSobrasExpanded] = useState(false);
+  const [faltasExpanded, setFaltasExpanded] = useState(false);
 
   // Animações
   const leftColumnAnim = useRef(new Animated.Value(0)).current;
   const rightColumnAnim = useRef(new Animated.Value(0)).current;
   const suggestionAnim = useRef(new Animated.Value(0)).current;
+  const sobrasFaltasAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible && userId) {
@@ -86,6 +89,8 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
       setLoading(false);
       setMatching(false);
       setMatchWasRunWithZeroSuggestions(false);
+      setSobrasExpanded(false);
+      setFaltasExpanded(false);
     }
   }, [visible, userId]);
 
@@ -120,6 +125,7 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
           leftColumnAnim.setValue(0);
           rightColumnAnim.setValue(0);
           suggestionAnim.setValue(0);
+          sobrasFaltasAnim.setValue(0);
         }
       } catch (error) {
         // Ignorar erros de imutabilidade
@@ -129,6 +135,7 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
     if (visible) {
       stopPreviousAnimation();
       resetValues();
+      sobrasFaltasAnim.setValue(0);
 
       // Usar requestAnimationFrame para garantir estabilidade
       const rafId = requestAnimationFrame(() => {
@@ -147,6 +154,12 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
                 toValue: 1,
                 duration: 400,
                 delay: 150,
+                useNativeDriver: true,
+              }),
+              Animated.timing(sobrasFaltasAnim, {
+                toValue: 1,
+                duration: 350,
+                delay: 50,
                 useNativeDriver: true,
               }),
             ]);
@@ -182,7 +195,7 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
         // Ignorar erros durante cleanup
       }
     };
-  }, [visible, leftColumnAnim, rightColumnAnim, suggestionAnim]);
+  }, [visible, leftColumnAnim, rightColumnAnim, suggestionAnim, sobrasFaltasAnim]);
 
   const loadData = async () => {
     if (!userId || !visible) return;
@@ -398,6 +411,24 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
     ],
   }), [suggestionAnim]);
 
+  // Animação de entrada da seção Sobras/Faltas
+  const sobrasFaltasSectionStyle = useMemo(
+    () => ({
+      opacity: sobrasFaltasAnim,
+      transform: [
+        {
+          translateY: sobrasFaltasAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [12, 0],
+          }),
+        },
+      ],
+    }),
+    [sobrasFaltasAnim]
+  );
+
+  const SOBRAS_FALTAS_PREVIEW = 5;
+
   return (
     <Modal
       visible={visible}
@@ -470,148 +501,209 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
             </View>
           )}
 
-          {/* Seção Sobras e Faltas */}
+          {/* Seção explícita: Sobras e Faltas — listas dedicadas */}
           {!loading && (
-          <View style={styles.sobrasFaltasSection}>
-            <View style={styles.sobrasFaltasHeader}>
-              <View style={styles.sobrasFaltasTitleRow}>
-                <MaterialIcons name="compare-arrows" size={22} color="#00b09b" />
-                <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasTitle}>
-                  Sobras e Faltas
+            <Animated.View style={[styles.sobrasFaltasSection, sobrasFaltasSectionStyle]}>
+              <View style={styles.sobrasFaltasHeader}>
+                <View style={styles.sobrasFaltasTitleRow}>
+                  <IconSymbol name="arrow.left.arrow.right.circle.fill" size={20} color="#00b09b" />
+                  <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasTitle}>
+                    Sobras e Faltas
+                  </ThemedText>
+                </View>
+                <ThemedText style={styles.sobrasFaltasSubtitle}>
+                  Transações e títulos pendentes de conciliação. Concilie nas colunas abaixo.
                 </ThemedText>
               </View>
-              <ThemedText style={styles.sobrasFaltasSubtitle}>
-                Resumo das transações e títulos pendentes de conciliação
-              </ThemedText>
-            </View>
-            <View style={styles.sobrasFaltasCards}>
-              {/* Card Sobras - Extrato bancário sem correspondência no ERP */}
-              <GlassContainer style={[styles.sobrasFaltasCard, styles.sobrasFaltasCardSobras]}>
-                <View style={[styles.sobrasFaltasCardIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-                  <MaterialIcons name="receipt" size={24} color="#10B981" />
-                </View>
-                <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasCardLabel}>Sobras</ThemedText>
-                <ThemedText style={styles.sobrasFaltasCardDesc}>
-                  Extrato sem título no ERP
-                </ThemedText>
-                <View style={styles.sobrasFaltasCardStats}>
-                  <View style={styles.sobrasFaltasBadge}>
-                    <Text style={styles.sobrasFaltasBadgeText}>
-                      {sobrasFaltasSummary.sobras.count} {sobrasFaltasSummary.sobras.count === 1 ? 'item' : 'itens'}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.sobrasFaltasTotal,
-                      { color: sobrasFaltasSummary.sobras.total >= 0 ? '#10B981' : '#EF4444' },
-                    ]}>
-                    {formatCurrency(Math.abs(sobrasFaltasSummary.sobras.total))}
-                    {sobrasFaltasSummary.sobras.total < 0 && ' (-)'}
-                  </Text>
-                </View>
-                {sobrasFaltasSummary.sobras.items.length > 0 ? (
-                  <ScrollView
-                    style={styles.sobrasFaltasList}
-                    showsVerticalScrollIndicator={false}
-                    nestedScrollEnabled>
-                    {sobrasFaltasSummary.sobras.items.slice(0, 5).map((item, idx) => (
-                      <View key={item.id} style={[styles.sobrasFaltasListItem, idx === 0 && styles.sobrasFaltasListItemFirst]}>
-                        <View style={styles.sobrasFaltasItemHeader}>
-                          <MaterialIcons name="receipt" size={12} color="rgba(16, 185, 129, 0.8)" style={styles.sobrasFaltasItemIcon} />
-                          <ThemedText style={styles.sobrasFaltasItemDesc} numberOfLines={1}>
-                            {item.descricao?.trim() || 'Transação sem descrição'}
-                          </ThemedText>
-                        </View>
-                        <View style={styles.sobrasFaltasItemRow}>
-                          <Text style={styles.sobrasFaltasItemDate}>{formatDate(item.data)}</Text>
-                          <Text
-                            style={[
-                              styles.sobrasFaltasItemValor,
-                              { color: item.tipo === 'receita' ? '#10B981' : '#EF4444' },
-                            ]}>
-                            {item.tipo === 'receita' ? '+' : '-'}{formatCurrency(item.valor)}
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                    {sobrasFaltasSummary.sobras.items.length > 5 && (
-                      <ThemedText style={styles.sobrasFaltasMore}>
-                        +{sobrasFaltasSummary.sobras.items.length - 5} nas colunas abaixo
-                      </ThemedText>
-                    )}
-                  </ScrollView>
-                ) : (
-                  <View style={styles.sobrasFaltasEmpty}>
-                    <MaterialIcons name="check-circle" size={28} color="rgba(16, 185, 129, 0.5)" />
-                    <ThemedText style={styles.sobrasFaltasEmptyText}>Tudo conciliado</ThemedText>
-                  </View>
-                )}
-              </GlassContainer>
 
-              {/* Card Faltas - Títulos ERP sem transação no extrato */}
-              <GlassContainer style={[styles.sobrasFaltasCard, styles.sobrasFaltasCardFaltas]}>
-                <View style={[styles.sobrasFaltasCardIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
-                  <MaterialIcons name="description" size={24} color="#6366F1" />
-                </View>
-                <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasCardLabel}>Faltas</ThemedText>
-                <ThemedText style={styles.sobrasFaltasCardDesc}>
-                  ERP sem transação no extrato
-                </ThemedText>
-                <View style={styles.sobrasFaltasCardStats}>
-                  <View style={[styles.sobrasFaltasBadge, styles.sobrasFaltasBadgeFaltas]}>
-                    <Text style={[styles.sobrasFaltasBadgeText, styles.sobrasFaltasBadgeTextFaltas]}>
-                      {sobrasFaltasSummary.faltas.count} {sobrasFaltasSummary.faltas.count === 1 ? 'item' : 'itens'}
+              <View style={styles.sobrasFaltasCards}>
+                {/* Sobras: transações no extrato sem título no ERP */}
+                <GlassContainer style={StyleSheet.flatten([styles.sobrasFaltasCard, styles.sobrasFaltasCardSobras])}>
+                  <View style={[styles.sobrasFaltasCardIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                    <IconSymbol name="building.columns.fill" size={22} color="#10B981" />
+                  </View>
+                  <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasCardLabel}>
+                    Sobras
+                  </ThemedText>
+                  <ThemedText style={styles.sobrasFaltasCardDesc}>
+                    Transações no extrato sem título no ERP
+                  </ThemedText>
+                  <View style={styles.sobrasFaltasCardStats}>
+                    <View style={styles.sobrasFaltasBadge}>
+                      <Text style={styles.sobrasFaltasBadgeText}>
+                        {sobrasFaltasSummary.sobras.count} {sobrasFaltasSummary.sobras.count === 1 ? 'item' : 'itens'}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.sobrasFaltasTotal,
+                        { color: sobrasFaltasSummary.sobras.total >= 0 ? '#10B981' : '#EF4444' },
+                      ]}>
+                      {formatCurrency(Math.abs(sobrasFaltasSummary.sobras.total))}
+                      {sobrasFaltasSummary.sobras.total < 0 && ' (-)'}
                     </Text>
                   </View>
-                  <Text
-                    style={[
-                      styles.sobrasFaltasTotal,
-                      { color: sobrasFaltasSummary.faltas.total >= 0 ? '#10B981' : '#EF4444' },
-                    ]}>
-                    {formatCurrency(Math.abs(sobrasFaltasSummary.faltas.total))}
-                    {sobrasFaltasSummary.faltas.total < 0 && ' (-)'}
-                  </Text>
-                </View>
-                {sobrasFaltasSummary.faltas.items.length > 0 ? (
-                  <ScrollView
-                    style={styles.sobrasFaltasList}
-                    showsVerticalScrollIndicator={false}
-                    nestedScrollEnabled>
-                    {sobrasFaltasSummary.faltas.items.slice(0, 5).map((item, idx) => (
-                      <View key={item.id} style={[styles.sobrasFaltasListItem, idx === 0 && styles.sobrasFaltasListItemFirst]}>
-                        <View style={styles.sobrasFaltasItemHeader}>
-                          <MaterialIcons name="description" size={12} color="rgba(99, 102, 241, 0.8)" style={styles.sobrasFaltasItemIcon} />
-                          <ThemedText style={styles.sobrasFaltasItemDesc} numberOfLines={1}>
-                            {item.fornecedor_cliente?.trim() || item.descricao?.trim() || 'Título sem identificação'}
-                          </ThemedText>
-                        </View>
-                        <View style={styles.sobrasFaltasItemRow}>
-                          <Text style={styles.sobrasFaltasItemDate}>{formatDate(item.data_vencimento)}</Text>
-                          <Text
+                  {sobrasFaltasSummary.sobras.items.length > 0 ? (
+                    <>
+                      <ScrollView
+                        style={[
+                          styles.sobrasFaltasList,
+                          sobrasExpanded && styles.sobrasFaltasListExpanded,
+                        ]}
+                        showsVerticalScrollIndicator={false}
+                        nestedScrollEnabled>
+                        {(sobrasExpanded
+                          ? sobrasFaltasSummary.sobras.items
+                          : sobrasFaltasSummary.sobras.items.slice(0, SOBRAS_FALTAS_PREVIEW)
+                        ).map((item, idx) => (
+                          <View
+                            key={item.id}
                             style={[
-                              styles.sobrasFaltasItemValor,
-                              { color: item.tipo === 'receber' ? '#10B981' : '#EF4444' },
+                              styles.sobrasFaltasListItem,
+                              idx === 0 && styles.sobrasFaltasListItemFirst,
                             ]}>
-                            {item.tipo === 'receber' ? '+' : '-'}{formatCurrency(item.valor)}
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                    {sobrasFaltasSummary.faltas.items.length > 5 && (
-                      <ThemedText style={styles.sobrasFaltasMore}>
-                        +{sobrasFaltasSummary.faltas.items.length - 5} nas colunas abaixo
+                            <View style={styles.sobrasFaltasItemHeader}>
+                              <IconSymbol name="building.columns.fill" size={12} color="rgba(16, 185, 129, 0.9)" />
+                              <ThemedText style={styles.sobrasFaltasItemDesc} numberOfLines={1}>
+                                {item.descricao?.trim() || 'Transação sem descrição'}
+                              </ThemedText>
+                            </View>
+                            <View style={styles.sobrasFaltasItemRow}>
+                              <Text style={styles.sobrasFaltasItemDate}>{formatDate(item.data)}</Text>
+                              <Text
+                                style={[
+                                  styles.sobrasFaltasItemValor,
+                                  { color: item.tipo === 'receita' ? '#10B981' : '#EF4444' },
+                                ]}>
+                                {item.tipo === 'receita' ? '+' : '-'}{formatCurrency(item.valor)}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </ScrollView>
+                      {sobrasFaltasSummary.sobras.items.length > SOBRAS_FALTAS_PREVIEW && (
+                        <TouchableOpacity
+                          style={styles.sobrasFaltasVerTodos}
+                          onPress={() => setSobrasExpanded((e) => !e)}
+                          activeOpacity={0.7}>
+                          <ThemedText style={styles.sobrasFaltasVerTodosText}>
+                            {sobrasExpanded
+                              ? 'Recolher'
+                              : `Ver todos (${sobrasFaltasSummary.sobras.items.length})`}
+                          </ThemedText>
+                          <IconSymbol
+                            name={sobrasExpanded ? 'chevron.up' : 'chevron.right'}
+                            size={14}
+                            color="#10B981"
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  ) : (
+                    <View style={styles.sobrasFaltasEmpty}>
+                      <IconSymbol name="checkmark.circle.fill" size={32} color="rgba(16, 185, 129, 0.6)" />
+                      <ThemedText style={styles.sobrasFaltasEmptyText}>Nenhuma sobra</ThemedText>
+                      <ThemedText style={styles.sobrasFaltasEmptySubtext}>
+                        Todas as transações do extrato têm título no ERP
                       </ThemedText>
-                    )}
-                  </ScrollView>
-                ) : (
-                  <View style={styles.sobrasFaltasEmpty}>
-                    <MaterialIcons name="check-circle" size={28} color="rgba(99, 102, 241, 0.5)" />
-                    <ThemedText style={styles.sobrasFaltasEmptyText}>Tudo conciliado</ThemedText>
+                    </View>
+                  )}
+                </GlassContainer>
+
+                {/* Faltas: títulos no ERP sem transação no extrato */}
+                <GlassContainer style={StyleSheet.flatten([styles.sobrasFaltasCard, styles.sobrasFaltasCardFaltas])}>
+                  <View style={[styles.sobrasFaltasCardIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+                    <IconSymbol name="doc.text.fill" size={22} color="#6366F1" />
                   </View>
-                )}
-              </GlassContainer>
-            </View>
-          </View>
+                  <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasCardLabel}>
+                    Faltas
+                  </ThemedText>
+                  <ThemedText style={styles.sobrasFaltasCardDesc}>
+                    Títulos no ERP sem transação no extrato
+                  </ThemedText>
+                  <View style={styles.sobrasFaltasCardStats}>
+                    <View style={[styles.sobrasFaltasBadge, styles.sobrasFaltasBadgeFaltas]}>
+                      <Text style={[styles.sobrasFaltasBadgeText, styles.sobrasFaltasBadgeTextFaltas]}>
+                        {sobrasFaltasSummary.faltas.count} {sobrasFaltasSummary.faltas.count === 1 ? 'item' : 'itens'}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.sobrasFaltasTotal,
+                        { color: sobrasFaltasSummary.faltas.total >= 0 ? '#10B981' : '#EF4444' },
+                      ]}>
+                      {formatCurrency(Math.abs(sobrasFaltasSummary.faltas.total))}
+                      {sobrasFaltasSummary.faltas.total < 0 && ' (-)'}
+                    </Text>
+                  </View>
+                  {sobrasFaltasSummary.faltas.items.length > 0 ? (
+                    <>
+                      <ScrollView
+                        style={[
+                          styles.sobrasFaltasList,
+                          faltasExpanded && styles.sobrasFaltasListExpanded,
+                        ]}
+                        showsVerticalScrollIndicator={false}
+                        nestedScrollEnabled>
+                        {(faltasExpanded
+                          ? sobrasFaltasSummary.faltas.items
+                          : sobrasFaltasSummary.faltas.items.slice(0, SOBRAS_FALTAS_PREVIEW)
+                        ).map((item, idx) => (
+                          <View
+                            key={item.id}
+                            style={[
+                              styles.sobrasFaltasListItem,
+                              idx === 0 && styles.sobrasFaltasListItemFirst,
+                            ]}>
+                            <View style={styles.sobrasFaltasItemHeader}>
+                              <IconSymbol name="doc.text.fill" size={12} color="rgba(99, 102, 241, 0.9)" />
+                              <ThemedText style={styles.sobrasFaltasItemDesc} numberOfLines={1}>
+                                {item.fornecedor_cliente?.trim() || item.descricao?.trim() || 'Título sem identificação'}
+                              </ThemedText>
+                            </View>
+                            <View style={styles.sobrasFaltasItemRow}>
+                              <Text style={styles.sobrasFaltasItemDate}>{formatDate(item.data_vencimento)}</Text>
+                              <Text
+                                style={[
+                                  styles.sobrasFaltasItemValor,
+                                  { color: item.tipo === 'receber' ? '#10B981' : '#EF4444' },
+                                ]}>
+                                {item.tipo === 'receber' ? '+' : '-'}{formatCurrency(item.valor)}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </ScrollView>
+                      {sobrasFaltasSummary.faltas.items.length > SOBRAS_FALTAS_PREVIEW && (
+                        <TouchableOpacity
+                          style={[styles.sobrasFaltasVerTodos, styles.sobrasFaltasVerTodosFaltas]}
+                          onPress={() => setFaltasExpanded((e) => !e)}
+                          activeOpacity={0.7}>
+                          <ThemedText style={styles.sobrasFaltasVerTodosTextFaltas}>
+                            {faltasExpanded
+                              ? 'Recolher'
+                              : `Ver todos (${sobrasFaltasSummary.faltas.items.length})`}
+                          </ThemedText>
+                          <IconSymbol
+                            name={faltasExpanded ? 'chevron.up' : 'chevron.right'}
+                            size={14}
+                            color="#6366F1"
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  ) : (
+                    <View style={styles.sobrasFaltasEmpty}>
+                      <IconSymbol name="checkmark.circle.fill" size={32} color="rgba(99, 102, 241, 0.6)" />
+                      <ThemedText style={styles.sobrasFaltasEmptyText}>Nenhuma falta</ThemedText>
+                      <ThemedText style={styles.sobrasFaltasEmptySubtext}>
+                        Todos os títulos do ERP têm transação no extrato
+                      </ThemedText>
+                    </View>
+                  )}
+                </GlassContainer>
+              </View>
+            </Animated.View>
           )}
 
           {/* Sugestões */}
@@ -1209,8 +1301,9 @@ const styles = StyleSheet.create({
   },
   sobrasFaltasSubtitle: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.5)',
-    marginLeft: 28,
+    color: 'rgba(255, 255, 255, 0.55)',
+    lineHeight: 17,
+    marginTop: 2,
   },
   sobrasFaltasCards: {
     flexDirection: 'row',
@@ -1277,7 +1370,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   sobrasFaltasList: {
-    maxHeight: 100,
+    maxHeight: 120,
+  },
+  sobrasFaltasListExpanded: {
+    maxHeight: 220,
+  },
+  sobrasFaltasVerTodos: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  sobrasFaltasVerTodosText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  sobrasFaltasVerTodosFaltas: {
+    borderTopColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  sobrasFaltasVerTodosTextFaltas: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6366F1',
   },
   sobrasFaltasListItem: {
     paddingVertical: 6,
@@ -1329,8 +1448,16 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   sobrasFaltasEmptyText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 6,
+  },
+  sobrasFaltasEmptySubtext: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.45)',
+    marginTop: 2,
+    textAlign: 'center',
+    paddingHorizontal: 8,
   },
 });

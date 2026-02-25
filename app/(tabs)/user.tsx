@@ -57,9 +57,9 @@ export default function UserScreen() {
         showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-        <ThemedText type="title" style={styles.title}>
-          Usuário
-        </ThemedText>
+          <ThemedText type="title" style={styles.title}>
+            Usuário
+          </ThemedText>
         </View>
 
         {/* User Info Card com Glassmorphism */}

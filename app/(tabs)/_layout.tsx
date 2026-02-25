@@ -1,7 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Tabs, usePathname } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
-import { Animated } from 'react-native';
+import { Tabs } from 'expo-router';
+import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { SwipeableTabWrapper } from '@/components/swipeable-tab-wrapper';
@@ -11,53 +10,28 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { isAdmin } = usePermissions();
-  const pathname = usePathname();
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    // Animação de fade quando troca de aba
-    let animation: Animated.CompositeAnimation | null = null;
-    
-    fadeAnim.stopAnimation((value) => {
-      fadeAnim.setValue(0);
-      animation = Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      });
-      animation.start();
-    });
-
-    // Cleanup
-    return () => {
-      if (animation) {
-        animation.stop();
-      }
-    };
-  }, [pathname]);
 
   return (
     <SwipeableTabWrapper>
-      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-        <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: '#00b09b',
-        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.6)',
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarShowLabel: false, // Ocultar texto completamente
-        tabBarStyle: {
-          backgroundColor: '#001a2e',
-          borderTopColor: 'rgba(255, 255, 255, 0.1)',
-          borderTopWidth: 1,
-          height: 90, // ✅ Altura maior para facilitar acesso no mobile
-          paddingTop: 8, // ✅ Mais espaço superior para ícones ficarem mais para cima
-          paddingBottom: 0, // ✅ Sem espaço inferior
-        },
-        tabBarItemStyle: {
-          paddingVertical: 0, // ✅ Sem padding vertical para ícones ficarem mais para cima
-        },
-      }}>
+      <Tabs
+        screenOptions={{
+          tabBarActiveTintColor: '#00b09b',
+          tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.6)',
+          headerShown: false,
+          tabBarButton: HapticTab,
+          tabBarShowLabel: false,
+          tabBarStyle: {
+            backgroundColor: '#001a2e',
+            borderTopColor: 'rgba(255, 255, 255, 0.1)',
+            borderTopWidth: 1,
+            height: 90,
+            paddingTop: 8,
+            paddingBottom: 0,
+          },
+          tabBarItemStyle: {
+            paddingVertical: 0,
+          },
+        }}>
       <Tabs.Screen
         name="index"
         options={{
@@ -115,8 +89,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <MaterialIcons name="settings" size={28} color={color} />,
         }}
       />
-        </Tabs>
-      </Animated.View>
+      </Tabs>
     </SwipeableTabWrapper>
   );
 }

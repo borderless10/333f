@@ -25,8 +25,8 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Carrega empresas do usuário
-   * Tenta primeiro buscar por associação (user_empresas)
-   * Se falhar ou retornar vazio, busca empresas diretas (codigo_empresa = userId)
+   * SEMPRE busca por associação (user_empresas) para garantir controle de acesso
+   * Se a função não existir, usa fallback temporário
    */
   const loadCompanies = useCallback(async () => {
     if (!userId) {
@@ -38,12 +38,12 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       
-      // Tenta buscar empresas associadas via user_empresas primeiro
+      // Busca empresas associadas via user_empresas (RPC)
       try {
         const empresasAssociadas = await buscarEmpresasUsuario(false);
         
-        if (empresasAssociadas && empresasAssociadas.length > 0) {
-          // Converter EmpresaComRole para Company
+        // Se retornou empresas, usa a lista
+        if (empresasAssociadas.length > 0) {
           const empresasConvertidas: Company[] = empresasAssociadas.map(e => ({
             id: e.id,
             codigo_empresa: e.codigo_empresa,
@@ -54,29 +54,38 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
             ativa: e.ativa && e.associacao_ativa,
             created_at: e.created_at,
           }));
-          
           setCompanies(empresasConvertidas);
           setLoading(false);
           return;
         }
         
-        // Se retornou array vazio, continua para fallback
-        console.log('Nenhuma empresa associada encontrada via user_empresas, usando fallback...');
-      } catch (error: any) {
-        // Se falhar (ex: função não existe), continua para fallback
-        console.log('Busca via user_empresas não disponível, usando fallback...');
-      }
-
-      // Fallback: busca empresas diretas onde codigo_empresa = userId
-      const { data, error } = await buscarEmpresas(userId, { ativa: true });
-
-      if (error) {
-        console.error('Erro ao carregar empresas:', error);
-        setCompanies([]);
+        // Lista vazia: usa fallback (empresas onde codigo_empresa = userId)
+        // Assim o seletor mostra empresas até o admin vincular o usuário em user_empresas
+        const { data, error: fallbackError } = await buscarEmpresas(userId, { ativa: true });
+        if (fallbackError) {
+          console.error('Erro ao carregar empresas (fallback):', fallbackError);
+          setCompanies([]);
+          return;
+        }
+        setCompanies(data || []);
+        setLoading(false);
         return;
+      } catch (error: any) {
+        // RPC não existe (PGRST202): usa fallback
+        if (error.code === 'PGRST202' || error.message?.includes('Could not find the function')) {
+          console.warn('⚠️ Sistema multiusuário não configurado. Execute user-empresas-setup.sql');
+          const { data, error: fallbackError } = await buscarEmpresas(userId, { ativa: true });
+          if (fallbackError) {
+            console.error('Erro ao carregar empresas (fallback):', fallbackError);
+            setCompanies([]);
+            return;
+          }
+          setCompanies(data || []);
+          return;
+        }
+        console.error('Erro ao buscar empresas do usuário:', error);
+        setCompanies([]);
       }
-
-      setCompanies(data || []);
     } catch (error) {
       console.error('Erro ao carregar empresas:', error);
       setCompanies([]);

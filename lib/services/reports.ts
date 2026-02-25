@@ -6,28 +6,47 @@ import { formatCurrency } from '../utils/currency';
  */
 export type ReportType = 'reconciliation' | 'cashflow';
 
+/** Item do relatório: par conciliado (transação ↔ título) */
+export interface ConciliadoItem {
+  transacao_id: number;
+  titulo_id: number;
+  descricao_tx: string;
+  descricao_titulo: string;
+  valor: number;
+  data_transacao: string;
+  data_vencimento: string;
+  data_conciliacao: string;
+  status: 'conciliado' | 'conciliado_com_diferenca';
+  diferenca_valor?: number;
+}
+
 /**
- * Interface para dados de relatório de conciliação
+ * Interface para dados de relatório de conciliação (dados reais da tabela conciliacoes)
  */
 export interface ReconciliationReportData {
   totalConciliado: number;
   totalNaoConciliado: number;
+  totalSobrasValor: number;
+  totalFaltasValor: number;
   taxaConciliacao: number;
   totalTransacoes: number;
   totalTitulos: number;
   transacoesConciliadas: number;
   titulosConciliados: number;
+  conciliados: ConciliadoItem[];
   sobras: Array<{
     id: number;
     descricao: string;
     valor: number;
     data: string;
+    tipo: string;
   }>;
   faltas: Array<{
     id: number;
     descricao: string;
     valor: number;
     data_vencimento: string;
+    tipo: string;
   }>;
   period: {
     start: string;
@@ -69,7 +88,8 @@ export interface CashFlowReportData {
 }
 
 /**
- * Gera relatório de conciliação
+ * Gera relatório de conciliação com dados reais da tabela conciliacoes
+ * Período aplicado às datas das transações e dos títulos
  */
 export async function generateReconciliationReport(
   userId: string,
@@ -84,7 +104,8 @@ export async function generateReconciliationReport(
       .select('*')
       .eq('codigo_empresa', userId)
       .gte('data', startDate)
-      .lte('data', endDate);
+      .lte('data', endDate)
+      .order('data', { ascending: false });
 
     if (accountId) {
       transacoesQuery = transacoesQuery.eq('conta_bancaria_id', accountId);
@@ -102,7 +123,8 @@ export async function generateReconciliationReport(
       .select('*')
       .eq('codigo_empresa', userId)
       .gte('data_vencimento', startDate)
-      .lte('data_vencimento', endDate);
+      .lte('data_vencimento', endDate)
+      .order('data_vencimento', { ascending: false });
 
     if (accountId) {
       titulosQuery = titulosQuery.eq('conta_bancaria_id', accountId);
@@ -114,67 +136,103 @@ export async function generateReconciliationReport(
       return { data: null, error: errorTit };
     }
 
-    // Buscar conciliações no período
-    const { data: reconciliations } = await supabase
-      .from('conciliacoes')
-      .select('transacao_id, titulo_id, diferenca_valor')
-      .in(
-        'transacao_id',
-        (transacoes || []).map((t) => t.id!).filter(Boolean)
-      );
+    const txList = transacoes || [];
+    const titulosList = titulos || [];
+    const txIds = txList.map((t) => t.id!).filter(Boolean);
 
-    const reconciledTxIds = new Set(reconciliations?.map((r) => r.transacao_id) || []);
-    const reconciledTitleIds = new Set(reconciliations?.map((r) => r.titulo_id) || []);
+    // Buscar conciliações do usuário cuja transação está no período
+    let reconciliations: Array<{
+      transacao_id: number;
+      titulo_id: number;
+      status: string;
+      diferenca_valor: number;
+      data_conciliacao: string;
+    }> = [];
 
+    if (txIds.length > 0) {
+      const { data: recData, error: recError } = await supabase
+        .from('conciliacoes')
+        .select('transacao_id, titulo_id, status, diferenca_valor, data_conciliacao')
+        .eq('usuario_id', userId)
+        .in('transacao_id', txIds);
+
+      if (!recError && recData?.length) {
+        reconciliations = recData as typeof reconciliations;
+      }
+    }
+
+    const reconciledTxIds = new Set(reconciliations.map((r) => r.transacao_id));
+    const reconciledTitleIds = new Set(reconciliations.map((r) => r.titulo_id));
     const transacoesConciliadas = reconciledTxIds.size;
     const titulosConciliados = reconciledTitleIds.size;
+    const totalTransacoes = txList.length;
+    const totalTitulos = titulosList.length;
 
-    const totalTransacoes = transacoes?.length || 0;
-    const totalTitulos = titulos?.length || 0;
-
-    // Calcular valores conciliados
-    const totalConciliado = (reconciliations || []).reduce((sum, r) => {
-      const tx = transacoes?.find((t) => t.id === r.transacao_id);
-      return sum + (tx?.valor || 0);
+    // Total conciliado: soma dos valores das transações conciliadas
+    const totalConciliado = reconciliations.reduce((sum, r) => {
+      const tx = txList.find((t) => t.id === r.transacao_id);
+      return sum + (tx?.valor ?? 0);
     }, 0);
 
-    const totalNaoConciliado =
-      (transacoes?.reduce((sum, t) => sum + t.valor, 0) || 0) +
-      (titulos?.reduce((sum, t) => sum + t.valor, 0) || 0) -
-      totalConciliado * 2; // Multiplicar por 2 porque conta transação e título
+    // Sobras: transações no período sem título correspondente
+    const sobras = txList
+      .filter((t) => !reconciledTxIds.has(t.id!))
+      .map((t) => ({
+        id: t.id!,
+        descricao: t.descricao ?? '',
+        valor: t.valor,
+        data: t.data,
+        tipo: t.tipo ?? 'despesa',
+      }));
+
+    // Faltas: títulos no período sem transação correspondente
+    const faltas = titulosList
+      .filter((t) => !reconciledTitleIds.has(t.id!))
+      .map((t) => ({
+        id: t.id!,
+        descricao: (t.descricao || t.fornecedor_cliente) ?? '',
+        valor: t.valor,
+        data_vencimento: t.data_vencimento,
+        tipo: t.tipo ?? 'pagar',
+      }));
+
+    const totalSobrasValor = sobras.reduce((s, i) => s + Math.abs(i.valor), 0);
+    const totalFaltasValor = faltas.reduce((s, i) => s + Math.abs(i.valor), 0);
+    const totalNaoConciliado = totalSobrasValor + totalFaltasValor;
 
     const taxaConciliacao =
       totalTransacoes > 0 ? (transacoesConciliadas / totalTransacoes) * 100 : 0;
 
-    // Sobras: transações sem título correspondente
-    const sobras = (transacoes || [])
-      .filter((t) => !reconciledTxIds.has(t.id!))
-      .map((t) => ({
-        id: t.id!,
-        descricao: t.descricao,
-        valor: t.valor,
-        data: t.data,
-      }));
-
-    // Faltas: títulos sem transação correspondente
-    const faltas = (titulos || [])
-      .filter((t) => !reconciledTitleIds.has(t.id!))
-      .map((t) => ({
-        id: t.id!,
-        descricao: t.descricao || t.fornecedor_cliente,
-        valor: t.valor,
-        data_vencimento: t.data_vencimento,
-      }));
+    // Lista de pares conciliados para o relatório
+    const conciliados: ConciliadoItem[] = reconciliations.map((r) => {
+      const tx = txList.find((t) => t.id === r.transacao_id);
+      const tit = titulosList.find((t) => t.id === r.titulo_id);
+      return {
+        transacao_id: r.transacao_id,
+        titulo_id: r.titulo_id,
+        descricao_tx: tx?.descricao ?? '—',
+        descricao_titulo: (tit?.fornecedor_cliente || tit?.descricao) ?? '—',
+        valor: tx?.valor ?? 0,
+        data_transacao: tx?.data ?? '',
+        data_vencimento: tit?.data_vencimento ?? '',
+        data_conciliacao: r.data_conciliacao ?? '',
+        status: (r.status as 'conciliado' | 'conciliado_com_diferenca') ?? 'conciliado',
+        diferenca_valor: r.diferenca_valor ?? 0,
+      };
+    });
 
     return {
       data: {
         totalConciliado,
         totalNaoConciliado,
+        totalSobrasValor,
+        totalFaltasValor,
         taxaConciliacao,
         totalTransacoes,
         totalTitulos,
         transacoesConciliadas,
         titulosConciliados,
+        conciliados,
         sobras,
         faltas,
         period: { start: startDate, end: endDate },
@@ -326,22 +384,34 @@ export function exportReportToCSV(
 ): string {
   if (type === 'reconciliation') {
     const data = reportData as ReconciliationReportData;
+    const formatDt = (s: string) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—');
     const lines = [
-      'Relatório de Conciliação Bancária',
+      'Relatório Conciliado x Não Conciliado',
       `Período: ${data.period.start} a ${data.period.end}`,
       '',
       'Resumo',
       `Total Conciliado,${formatCurrency(data.totalConciliado)}`,
-      `Total Não Conciliado,${formatCurrency(data.totalNaoConciliado)}`,
+      `Total Não Conciliado (sobras + faltas),${formatCurrency(data.totalNaoConciliado)}`,
+      `Sobras (valor),${formatCurrency(data.totalSobrasValor)}`,
+      `Faltas (valor),${formatCurrency(data.totalFaltasValor)}`,
       `Taxa de Conciliação,${data.taxaConciliacao.toFixed(2)}%`,
+      `Transações conciliadas,${data.transacoesConciliadas}`,
+      `Títulos conciliados,${data.titulosConciliados}`,
       '',
-      'Sobras (Transações sem match)',
-      'Descrição,Valor,Data',
-      ...data.sobras.map(s => `${s.descricao},${formatCurrency(s.valor)},${s.data}`),
+      'Conciliados (Transação ↔ Título)',
+      'Descrição Transação,Descrição Título,Valor,Data Transação,Data Vencimento,Data Conciliação,Status',
+      ...data.conciliados.map(
+        c =>
+          `"${(c.descricao_tx || '').replace(/"/g, '""')}","${(c.descricao_titulo || '').replace(/"/g, '""')}",${formatCurrency(c.valor)},${formatDt(c.data_transacao)},${formatDt(c.data_vencimento)},${formatDt(c.data_conciliacao)},${c.status}`
+      ),
       '',
-      'Faltas (Títulos sem match)',
-      'Descrição,Valor,Data Vencimento',
-      ...data.faltas.map(f => `${f.descricao},${formatCurrency(f.valor)},${f.data_vencimento}`),
+      'Sobras (Transações sem título no ERP)',
+      'Descrição,Valor,Data,Tipo',
+      ...data.sobras.map(s => `"${(s.descricao || '').replace(/"/g, '""')}",${formatCurrency(s.valor)},${s.data},${s.tipo}`),
+      '',
+      'Faltas (Títulos sem transação no extrato)',
+      'Descrição,Valor,Data Vencimento,Tipo',
+      ...data.faltas.map(f => `"${(f.descricao || '').replace(/"/g, '""')}",${formatCurrency(f.valor)},${f.data_vencimento},${f.tipo}`),
     ];
     return lines.join('\n');
   } else {

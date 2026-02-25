@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   ScrollView,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -32,6 +33,16 @@ import * as Sharing from 'expo-sharing';
 import Toast from 'react-native-toast-message';
 import { toastConfig } from '@/components/NotificationToast';
 
+function formatReportDate(dateStr: string) {
+  if (!dateStr?.trim()) return '—';
+  try {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  } catch {
+    return '—';
+  }
+}
+
 interface ReportsModalProps {
   visible: boolean;
   onClose: () => void;
@@ -51,6 +62,8 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [reconciliationData, setReconciliationData] = useState<ReconciliationReportData | null>(null);
   const [cashFlowData, setCashFlowData] = useState<CashFlowReportData | null>(null);
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const resultAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible && userId) {
@@ -92,7 +105,13 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
         }
 
         setReconciliationData(data);
-        showSuccess('Relatório de conciliação gerado com sucesso!', { 
+        resultAnim.setValue(0);
+        Animated.timing(resultAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }).start();
+        showSuccess('Relatório conciliado x não conciliado gerado', {
           iconType: 'reconciliation',
           duration: 3000,
         });
@@ -213,7 +232,7 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
                         Relatório de Conciliação
                       </ThemedText>
                       <ThemedText style={styles.cardDescription}>
-                        Visualize transações conciliadas e não conciliadas, sobras e faltas
+                        Extrato conciliado x não conciliado, com dados reais e exportação CSV
                       </ThemedText>
                     </View>
                   </View>
@@ -275,16 +294,40 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
                   <ThemedText style={styles.filterLabel}>Conta Bancária:</ThemedText>
                   <TouchableOpacity
                     style={styles.accountPicker}
-                    onPress={() => {
-                      // TODO: Implementar seletor de conta
-                    }}>
+                    onPress={() => setShowAccountPicker((v) => !v)}
+                    activeOpacity={0.8}>
                     <Text style={styles.accountPickerText}>
                       {selectedAccount
-                        ? contas.find(c => c.id === selectedAccount)?.descricao
+                        ? contas.find((c) => c.id === selectedAccount)?.descricao
                         : 'Todas as contas'}
                     </Text>
                     <IconSymbol name="chevron.down" size={16} color="rgba(255, 255, 255, 0.7)" />
                   </TouchableOpacity>
+                  {showAccountPicker && (
+                    <View style={styles.accountPickerDropdown}>
+                      <TouchableOpacity
+                        style={styles.accountPickerOption}
+                        onPress={() => {
+                          setSelectedAccount(undefined);
+                          setShowAccountPicker(false);
+                        }}
+                        activeOpacity={0.7}>
+                        <ThemedText style={styles.accountPickerOptionText}>Todas as contas</ThemedText>
+                      </TouchableOpacity>
+                      {contas.map((c) => (
+                        <TouchableOpacity
+                          key={c.id}
+                          style={styles.accountPickerOption}
+                          onPress={() => {
+                            setSelectedAccount(c.id!);
+                            setShowAccountPicker(false);
+                          }}
+                          activeOpacity={0.7}>
+                          <ThemedText style={styles.accountPickerOptionText}>{c.descricao}</ThemedText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.actions}>
@@ -316,48 +359,168 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
               )}
 
               {!loading && selectedReport === 'reconciliation' && reconciliationData && (
-                <View style={styles.resultsContainer}>
+                <Animated.View
+                  style={[
+                    styles.resultsContainer,
+                    {
+                      opacity: resultAnim,
+                      transform: [
+                        {
+                          translateY: resultAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [16, 0],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}>
                   <GlassContainer style={styles.summaryCard}>
                     <ThemedText type="subtitle" style={styles.resultsTitle}>
-                      Resumo de Conciliação
+                      Conciliado x Não conciliado
+                    </ThemedText>
+                    <ThemedText style={styles.periodText}>
+                      Período: {formatReportDate(reconciliationData.period.start)} a {formatReportDate(reconciliationData.period.end)}
                     </ThemedText>
 
                     <View style={styles.summaryGrid}>
-                      <View style={styles.summaryItem}>
-                        <ThemedText style={styles.summaryLabel}>Total Conciliado</ThemedText>
-                        <ThemedText type="defaultSemiBold" style={styles.summaryValue}>
+                      <View style={[styles.summaryItem, styles.summaryItemHighlight]}>
+                        <ThemedText style={styles.summaryLabel}>Total conciliado</ThemedText>
+                        <ThemedText type="defaultSemiBold" style={[styles.summaryValue, { color: '#10B981' }]}>
                           {formatCurrency(reconciliationData.totalConciliado)}
                         </ThemedText>
-                      </View>
-
-                      <View style={styles.summaryItem}>
-                        <ThemedText style={styles.summaryLabel}>Não Conciliado</ThemedText>
-                        <ThemedText type="defaultSemiBold" style={styles.summaryValue}>
-                          {formatCurrency(reconciliationData.totalNaoConciliado)}
+                        <ThemedText style={styles.summaryMeta}>
+                          {reconciliationData.transacoesConciliadas} trans. · {reconciliationData.titulosConciliados} tít.
                         </ThemedText>
                       </View>
-
                       <View style={styles.summaryItem}>
-                        <ThemedText style={styles.summaryLabel}>Taxa de Conciliação</ThemedText>
+                        <ThemedText style={styles.summaryLabel}>Não conciliado</ThemedText>
+                        <ThemedText type="defaultSemiBold" style={[styles.summaryValue, { color: '#F59E0B' }]}>
+                          {formatCurrency(reconciliationData.totalNaoConciliado)}
+                        </ThemedText>
+                        <ThemedText style={styles.summaryMeta}>
+                          Sobras: {formatCurrency(reconciliationData.totalSobrasValor)} · Faltas: {formatCurrency(reconciliationData.totalFaltasValor)}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.summaryItem}>
+                        <ThemedText style={styles.summaryLabel}>Taxa de conciliação</ThemedText>
                         <ThemedText type="defaultSemiBold" style={styles.summaryValue}>
                           {reconciliationData.taxaConciliacao.toFixed(1)}%
                         </ThemedText>
                       </View>
-
-                      <View style={styles.summaryItem}>
-                        <ThemedText style={styles.summaryLabel}>Sobras</ThemedText>
-                        <ThemedText type="defaultSemiBold" style={styles.summaryValue}>
-                          {reconciliationData.sobras.length}
-                        </ThemedText>
-                      </View>
-
-                      <View style={styles.summaryItem}>
-                        <ThemedText style={styles.summaryLabel}>Faltas</ThemedText>
-                        <ThemedText type="defaultSemiBold" style={styles.summaryValue}>
-                          {reconciliationData.faltas.length}
-                        </ThemedText>
-                      </View>
                     </View>
+
+                    {/* Lista: Conciliados */}
+                    {reconciliationData.conciliados.length > 0 && (
+                      <View style={styles.reportSection}>
+                        <View style={styles.reportSectionHeader}>
+                          <IconSymbol name="checkmark.circle.fill" size={18} color="#10B981" />
+                          <ThemedText type="defaultSemiBold" style={styles.reportSectionTitle}>
+                            Conciliados ({reconciliationData.conciliados.length})
+                          </ThemedText>
+                        </View>
+                        <View style={styles.reportList}>
+                          {reconciliationData.conciliados.slice(0, 15).map((c) => (
+                            <View key={`${c.transacao_id}-${c.titulo_id}`} style={styles.reportRow}>
+                              <View style={styles.reportRowContent}>
+                                <ThemedText style={styles.reportRowDesc} numberOfLines={1}>
+                                  {c.descricao_tx} ↔ {c.descricao_titulo}
+                                </ThemedText>
+                                <ThemedText style={styles.reportRowMeta}>
+                                  {formatReportDate(c.data_transacao)} · {formatCurrency(c.valor)}
+                                </ThemedText>
+                              </View>
+                            </View>
+                          ))}
+                          {reconciliationData.conciliados.length > 15 && (
+                            <ThemedText style={styles.reportMore}>
+                              +{reconciliationData.conciliados.length - 15} no CSV
+                            </ThemedText>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Lista: Sobras (não conciliado) */}
+                    {reconciliationData.sobras.length > 0 && (
+                      <View style={styles.reportSection}>
+                        <View style={styles.reportSectionHeader}>
+                          <IconSymbol name="building.columns.fill" size={18} color="#F59E0B" />
+                          <ThemedText type="defaultSemiBold" style={styles.reportSectionTitle}>
+                            Sobras — extrato sem título ({reconciliationData.sobras.length})
+                          </ThemedText>
+                        </View>
+                        <View style={styles.reportList}>
+                          {reconciliationData.sobras.slice(0, 10).map((s) => (
+                            <View key={s.id} style={styles.reportRow}>
+                              <View style={styles.reportRowContent}>
+                                <ThemedText style={styles.reportRowDesc} numberOfLines={1}>
+                                  {s.descricao || 'Sem descrição'}
+                                </ThemedText>
+                                <ThemedText style={styles.reportRowMeta}>
+                                  {formatReportDate(s.data)} ·{' '}
+                                  <Text style={{ color: s.tipo === 'receita' ? '#10B981' : '#EF4444' }}>
+                                    {s.tipo === 'receita' ? '+' : '-'}{formatCurrency(s.valor)}
+                                  </Text>
+                                </ThemedText>
+                              </View>
+                            </View>
+                          ))}
+                          {reconciliationData.sobras.length > 10 && (
+                            <ThemedText style={styles.reportMore}>
+                              +{reconciliationData.sobras.length - 10} no CSV
+                            </ThemedText>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Lista: Faltas (não conciliado) */}
+                    {reconciliationData.faltas.length > 0 && (
+                      <View style={styles.reportSection}>
+                        <View style={styles.reportSectionHeader}>
+                          <IconSymbol name="doc.text.fill" size={18} color="#6366F1" />
+                          <ThemedText type="defaultSemiBold" style={styles.reportSectionTitle}>
+                            Faltas — título sem transação ({reconciliationData.faltas.length})
+                          </ThemedText>
+                        </View>
+                        <View style={styles.reportList}>
+                          {reconciliationData.faltas.slice(0, 10).map((f) => (
+                            <View key={f.id} style={styles.reportRow}>
+                              <View style={styles.reportRowContent}>
+                                <ThemedText style={styles.reportRowDesc} numberOfLines={1}>
+                                  {f.descricao || 'Sem descrição'}
+                                </ThemedText>
+                                <ThemedText style={styles.reportRowMeta}>
+                                  {formatReportDate(f.data_vencimento)} ·{' '}
+                                  <Text style={{ color: f.tipo === 'receber' ? '#10B981' : '#EF4444' }}>
+                                    {f.tipo === 'receber' ? '+' : '-'}{formatCurrency(f.valor)}
+                                  </Text>
+                                </ThemedText>
+                              </View>
+                            </View>
+                          ))}
+                          {reconciliationData.faltas.length > 10 && (
+                            <ThemedText style={styles.reportMore}>
+                              +{reconciliationData.faltas.length - 10} no CSV
+                            </ThemedText>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {reconciliationData.conciliados.length === 0 &&
+                      reconciliationData.sobras.length === 0 &&
+                      reconciliationData.faltas.length === 0 && (
+                        <View style={styles.emptyReport}>
+                          <IconSymbol name="checkmark.circle.fill" size={40} color="rgba(16, 185, 129, 0.6)" />
+                          <ThemedText style={styles.emptyReportText}>
+                            Nenhum dado no período
+                          </ThemedText>
+                          <ThemedText style={styles.emptyReportSubtext}>
+                            Altere as datas ou a conta e gere novamente.
+                          </ThemedText>
+                        </View>
+                    )}
 
                     <Button
                       title="Exportar CSV"
@@ -365,7 +528,7 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
                       style={[styles.exportButton, styles.primaryButton]}
                     />
                   </GlassContainer>
-                </View>
+                </Animated.View>
               )}
 
               {!loading && selectedReport === 'cashflow' && cashFlowData && (
@@ -556,7 +719,12 @@ const styles = StyleSheet.create({
   },
   resultsTitle: {
     color: '#FFFFFF',
-    marginBottom: 20,
+    marginBottom: 8,
+  },
+  periodText: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginBottom: 16,
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -571,6 +739,15 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
   },
+  summaryItemHighlight: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#10B981',
+  },
+  summaryMeta: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 4,
+  },
   summaryLabel: {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 12,
@@ -583,5 +760,77 @@ const styles = StyleSheet.create({
   },
   exportButton: {
     marginTop: 8,
+  },
+  reportSection: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  reportSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  reportSectionTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
+  reportList: {
+    gap: 8,
+  },
+  reportRow: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 12,
+  },
+  reportRowContent: {
+    gap: 4,
+  },
+  reportRowDesc: {
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  reportRowMeta: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  reportMore: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.45)',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  emptyReport: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  emptyReportText: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  emptyReportSubtext: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  accountPickerDropdown: {
+    marginTop: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    overflow: 'hidden',
+  },
+  accountPickerOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  accountPickerOptionText: {
+    color: '#FFFFFF',
+    fontSize: 15,
   },
 });

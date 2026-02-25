@@ -50,25 +50,21 @@ export async function buscarEmpresasUsuario(
     });
 
     if (error) {
-      // Se a função não existe (código PGRST202), retorna array vazio
-      // Isso permite que o app funcione mesmo sem a tabela user_empresas
+      // Se a função não existe (PGRST202), lança para o CompanyContext usar fallback (buscarEmpresas por userId)
       if (error.code === 'PGRST202' || error.message?.includes('Could not find the function')) {
         console.warn('Função buscar_empresas_usuario não encontrada. Execute o SQL user-empresas-setup.sql');
-        return [];
+        throw error;
       }
-      
       console.error('Erro ao buscar empresas do usuário:', error);
       throw error;
     }
 
     return (data || []) as EmpresaComRole[];
   } catch (error: any) {
-    // Se a função não existe, retorna array vazio (fallback)
+    // Repassa o erro para o CompanyContext decidir (fallback quando RPC não existe)
     if (error.code === 'PGRST202' || error.message?.includes('Could not find the function')) {
-      console.warn('Função buscar_empresas_usuario não encontrada. Execute o SQL user-empresas-setup.sql');
-      return [];
+      throw error;
     }
-    
     console.error('Erro ao buscar empresas do usuário:', error);
     throw error;
   }

@@ -135,13 +135,13 @@ export function UserCompanyModal({
 
         showSuccess(message, {
           title: `${total} empresa${total !== 1 ? 's' : ''} vinculada${total !== 1 ? 's' : ''}`,
-          iconType: 'link',
+          iconType: 'user_company',
           duration: 4000,
         });
       } else if (kept > 0) {
         showInfo(`Nenhuma alteração necessária`, {
           title: 'Empresas já vinculadas',
-          iconType: 'link',
+          iconType: 'user_company',
         });
       }
 
@@ -188,8 +188,11 @@ export function UserCompanyModal({
           {/* Header */}
           <View style={styles.modalHeader}>
             <View style={styles.headerLeft}>
-              <View style={styles.iconContainer}>
-                <IconSymbol name="building.2.fill" size={28} color="#00b09b" />
+              <View style={styles.userIconCircle}>
+                <IconSymbol name="building.2.fill" size={24} color="#FFFFFF" />
+                <View style={styles.userIconBadge}>
+                  <IconSymbol name="person.fill" size={16} color="#8B5CF6" />
+                </View>
               </View>
               <View style={styles.headerText}>
                 <ThemedText type="subtitle" style={styles.modalTitle}>
@@ -367,6 +370,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     flex: 1,
+  },
+  userIconCircle: {
+    position: 'relative',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0, 176, 155, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(0, 176, 155, 0.4)',
+  },
+  userIconBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#8B5CF6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#0A192F',
   },
   iconContainer: {
     width: 44,

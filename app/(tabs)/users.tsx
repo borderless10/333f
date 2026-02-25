@@ -478,31 +478,33 @@ export default function UsersScreen() {
                       </View>
 
                       {!isCurrentUser && (
-                        <View style={styles.actionsRow}>
-                          <TouchableOpacity
-                            onPress={() => openModalChangeRole(user)}
-                            style={styles.actionButton}
-                            activeOpacity={0.7}>
-                            <IconSymbol name="pencil" size={16} color="#00b09b" />
-                            <Text style={styles.actionButtonText}>
-                              {user.has_profile ? 'Alterar Perfil' : 'Atribuir Perfil'}
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => {
-                              setSelectedUserForCompanies(user);
-                              setCompanyModalVisible(true);
-                            }}
-                            style={[styles.actionButton, styles.actionButtonPurple]}
-                            activeOpacity={0.7}>
-                            <IconSymbol name="building.2.fill" size={16} color="#8B5CF6" />
-                            <Text style={[styles.actionButtonText, { color: '#8B5CF6' }]}>
-                              Empresas
-                            </Text>
-                          </TouchableOpacity>
+                        <View style={styles.actionsColumn}>
+                          <View style={styles.actionsRow}>
+                            <TouchableOpacity
+                              onPress={() => openModalChangeRole(user)}
+                              style={styles.actionButton}
+                              activeOpacity={0.7}>
+                              <IconSymbol name="pencil" size={16} color="#00b09b" />
+                              <Text style={styles.actionButtonText}>
+                                {user.has_profile ? 'Alterar Perfil' : 'Atribuir Perfil'}
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setSelectedUserForCompanies(user);
+                                setCompanyModalVisible(true);
+                              }}
+                              style={[styles.actionButton, styles.actionButtonPurple]}
+                              activeOpacity={0.7}>
+                              <IconSymbol name="building.2.fill" size={16} color="#8B5CF6" />
+                              <Text style={[styles.actionButtonText, { color: '#8B5CF6' }]}>
+                                Empresas
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
                           <TouchableOpacity
                             onPress={() => handleRemoveProfile(user)}
-                            style={[styles.actionButton, styles.actionButtonDanger]}
+                            style={[styles.actionButtonFull, styles.actionButtonDanger]}
                             activeOpacity={0.7}>
                             <IconSymbol name="trash" size={16} color="#EF4444" />
                             <Text style={styles.actionButtonTextDanger}>Deletar Usuário</Text>
@@ -1058,33 +1060,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  actionsRow: {
-    flexDirection: 'row',
+  actionsColumn: {
     gap: 8,
+    marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   actionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: 'rgba(0, 176, 155, 0.2)',
   },
+  actionButtonFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
   actionButtonDanger: {
     backgroundColor: 'rgba(239, 68, 68, 0.2)',
   },
+  actionButtonPurple: {
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+  },
   actionButtonText: {
     color: '#00b09b',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   actionButtonTextDanger: {
     color: '#EF4444',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   emptyState: {

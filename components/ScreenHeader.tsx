@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useMemo } from 'react';
 import { Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CompanySelector } from './CompanySelector';
+import { IconSymbol } from './ui/icon-symbol';
 
 interface ScreenHeaderProps {
   title: string;
@@ -13,6 +14,8 @@ interface ScreenHeaderProps {
     visible?: boolean;
   };
   showCompanySelector?: boolean;
+  leftIcon?: string; // Novo: ícone decorativo à esquerda do título
+  leftIconColor?: string; // Cor personalizada para o ícone
 }
 
 export function ScreenHeader({
@@ -20,6 +23,8 @@ export function ScreenHeader({
   subtitle,
   rightAction,
   showCompanySelector = true,
+  leftIcon,
+  leftIconColor = '#00b09b',
 }: ScreenHeaderProps) {
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -147,13 +152,20 @@ export function ScreenHeader({
       <View style={styles.headerContent}>
         <View style={styles.headerTextContainer}>
           <Animated.View style={[titleStyle, styles.titleContainer]}>
-            <Text style={styles.title} numberOfLines={2}>
-              {title}
-            </Text>
+            <View style={styles.titleRow}>
+              {leftIcon && (
+                <View style={styles.leftIconContainer}>
+                  <IconSymbol name={leftIcon as any} size={28} color={leftIconColor} />
+                </View>
+              )}
+              <Text style={styles.title} numberOfLines={2}>
+                {title}
+              </Text>
+            </View>
           </Animated.View>
           {subtitle && (
             <Animated.View style={[subtitleStyle, styles.subtitleContainer]}>
-              <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={styles.subtitle} numberOfLines={2}>
                 {subtitle}
               </Text>
             </Animated.View>
@@ -200,6 +212,19 @@ const styles = StyleSheet.create({
   titleContainer: {
     width: '100%',
     alignItems: 'flex-start',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  leftIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 176, 155, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: 24,

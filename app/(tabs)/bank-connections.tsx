@@ -449,8 +449,8 @@ export default function BankConnectionsScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={styles.headerWrapper}>
           <ScreenHeader
-            title="Conexões Open Finance"
-            subtitle={`${connections.length} conexão${connections.length !== 1 ? 'ões' : ''} cadastrada${connections.length !== 1 ? 's' : ''}`}
+            title="Open Finance"
+            subtitle={`${connections.length} ${connections.length === 1 ? 'conexão' : 'conexões'} cadastrada${connections.length !== 1 ? 's' : ''}`}
             rightAction={{
               icon: 'add',
               onPress: () => setNewConnectionVisible(true),
@@ -605,6 +605,8 @@ export default function BankConnectionsScreen() {
                         {connection.conta_bancaria_id ? 'Alterar Conta' : 'Vincular Conta'}
                       </Text>
                     </TouchableOpacity>
+                  </View>
+                  <View style={styles.logsRevokeRow}>
                     <TouchableOpacity
                       style={styles.actionButton}
                       onPress={() => {
@@ -617,8 +619,6 @@ export default function BankConnectionsScreen() {
                         Ver Logs
                       </Text>
                     </TouchableOpacity>
-                  </View>
-                  <View style={styles.revokeRow}>
                     <TouchableOpacity
                       style={[styles.actionButton, styles.actionButtonDanger]}
                       onPress={() => handleRevokeConsent(connection)}
@@ -836,11 +836,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
-  revokeRow: {
+  logsRevokeRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
+    gap: 10,
+    marginTop: 10,
   },
   actionButton: {
     flexDirection: 'row',
