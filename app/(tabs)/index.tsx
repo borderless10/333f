@@ -14,6 +14,7 @@ import { useNotification } from '@/hooks/use-notification';
 import { buscarTransacoes, type TransactionWithAccount } from '@/lib/services/transactions';
 import { buscarTitulos, type TitleWithAccount } from '@/lib/services/titles';
 import { formatCurrency } from '@/lib/utils/currency';
+import { generateReconciliationReport as getReconciliationReportData, type ReconciliationReportData } from '@/lib/services/reports';
 import { generateReconciliationReport, shareReconciliationReport } from '@/lib/services/reconciliation-export';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
@@ -74,6 +75,9 @@ export default function DashboardScreen() {
   const [titles, setTitles] = React.useState<TitleWithAccount[]>([]);
   const [selectedPeriod, setSelectedPeriod] = React.useState<'today' | 'week' | 'month' | 'year'>('month');
   const [loading, setLoading] = React.useState(true);
+  const [reconciliationSummary, setReconciliationSummary] = React.useState<ReconciliationReportData | null>(null);
+  const [reconciliationSummaryLoading, setReconciliationSummaryLoading] = React.useState(false);
+  const [reconciliationSummaryError, setReconciliationSummaryError] = React.useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const { selectedCompany } = useCompany();
@@ -282,6 +286,49 @@ export default function DashboardScreen() {
   useEffect(() => {
     loadTransactions();
   }, [loadTransactions]);
+
+  // Período atual em formato ISO para o relatório de conciliação
+  const periodDates = useMemo(() => {
+    const { start, end } = getPeriodDates(selectedPeriod);
+    return {
+      startStr: start.toISOString().split('T')[0],
+      endStr: end.toISOString().split('T')[0],
+    };
+  }, [selectedPeriod]);
+
+  // Carregar resumo de conciliação do período
+  useEffect(() => {
+    if (!userId) {
+      setReconciliationSummary(null);
+      setReconciliationSummaryError(null);
+      return;
+    }
+    let cancelled = false;
+    setReconciliationSummaryLoading(true);
+    setReconciliationSummaryError(null);
+    getReconciliationReportData(userId, periodDates.startStr, periodDates.endStr)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setReconciliationSummaryError(error?.message ?? 'Erro ao carregar conciliação');
+          setReconciliationSummary(null);
+          return;
+        }
+        setReconciliationSummary(data ?? null);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setReconciliationSummaryError(err?.message ?? 'Erro ao carregar conciliação');
+          setReconciliationSummary(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReconciliationSummaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, periodDates.startStr, periodDates.endStr]);
 
   // Filtrar transações por período selecionado
   const filteredTransactions = useMemo(() => {
@@ -1141,6 +1188,76 @@ export default function DashboardScreen() {
               Conciliação Bancária
             </ThemedText>
           </View>
+
+          {/* Cards de resumo da conciliação (período selecionado) */}
+          {reconciliationSummaryLoading && (
+            <View style={styles.reconciliationStatsRow}>
+              <GlassContainer style={styles.reconciliationStatCardSkeleton}>
+                <ActivityIndicator size="small" color="#00b09b" />
+                <ThemedText style={styles.reconciliationStatSkeletonText}>Carregando...</ThemedText>
+              </GlassContainer>
+            </View>
+          )}
+          {!reconciliationSummaryLoading && reconciliationSummaryError && (
+            <View style={styles.reconciliationStatsRow}>
+              <GlassContainer style={styles.reconciliationStatCardError}>
+                <IconSymbol name="exclamationmark.triangle.fill" size={20} color="#F59E0B" />
+                <ThemedText style={styles.reconciliationStatErrorText} numberOfLines={2}>
+                  {reconciliationSummaryError}
+                </ThemedText>
+              </GlassContainer>
+            </View>
+          )}
+          {!reconciliationSummaryLoading && reconciliationSummary && (
+            <View style={styles.reconciliationStatsGrid}>
+              <GlassContainer style={styles.reconciliationStatCard}>
+                <View style={[styles.reconciliationStatIconWrap, { backgroundColor: '#00b09b20' }]}>
+                  <IconSymbol name="percent" size={20} color="#00b09b" />
+                </View>
+                <ThemedText style={styles.reconciliationStatLabel}>Taxa</ThemedText>
+                <Text style={styles.reconciliationStatValue}>
+                  {reconciliationSummary.taxaConciliacao.toFixed(0)}%
+                </Text>
+              </GlassContainer>
+              <GlassContainer style={styles.reconciliationStatCard}>
+                <View style={[styles.reconciliationStatIconWrap, { backgroundColor: '#10B98120' }]}>
+                  <IconSymbol name="checkmark.circle.fill" size={20} color="#10B981" />
+                </View>
+                <ThemedText style={styles.reconciliationStatLabel}>Conciliados</ThemedText>
+                <Text style={styles.reconciliationStatValue} numberOfLines={1}>
+                  {formatCurrency(reconciliationSummary.totalConciliado)}
+                </Text>
+                <ThemedText style={styles.reconciliationStatSub}>
+                  {reconciliationSummary.transacoesConciliadas} trans.
+                </ThemedText>
+              </GlassContainer>
+              <GlassContainer style={styles.reconciliationStatCard}>
+                <View style={[styles.reconciliationStatIconWrap, { backgroundColor: '#F59E0B20' }]}>
+                  <IconSymbol name="arrow.down.doc.fill" size={20} color="#F59E0B" />
+                </View>
+                <ThemedText style={styles.reconciliationStatLabel}>Sobras</ThemedText>
+                <Text style={styles.reconciliationStatValue} numberOfLines={1}>
+                  {formatCurrency(reconciliationSummary.totalSobrasValor)}
+                </Text>
+                <ThemedText style={styles.reconciliationStatSub}>
+                  {reconciliationSummary.sobras.length} itens
+                </ThemedText>
+              </GlassContainer>
+              <GlassContainer style={styles.reconciliationStatCard}>
+                <View style={[styles.reconciliationStatIconWrap, { backgroundColor: '#EF444420' }]}>
+                  <IconSymbol name="doc.badge.plus" size={20} color="#EF4444" />
+                </View>
+                <ThemedText style={styles.reconciliationStatLabel}>Faltas</ThemedText>
+                <Text style={styles.reconciliationStatValue} numberOfLines={1}>
+                  {formatCurrency(reconciliationSummary.totalFaltasValor)}
+                </Text>
+                <ThemedText style={styles.reconciliationStatSub}>
+                  {reconciliationSummary.faltas.length} itens
+                </ThemedText>
+              </GlassContainer>
+            </View>
+          )}
+
           <GlassContainer style={styles.reconciliationCard}>
             <View style={styles.reconciliationContent}>
               <View style={styles.reconciliationIconContainer}>
@@ -1589,6 +1706,73 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.6)',
     textAlign: 'center',
+  },
+  reconciliationStatsRow: {
+    marginBottom: 12,
+  },
+  reconciliationStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+  },
+  reconciliationStatCard: {
+    width: '48%',
+    minWidth: 140,
+    padding: 12,
+    minHeight: 88,
+  },
+  reconciliationStatIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    padding: 2,
+  },
+  reconciliationStatLabel: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.65)',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  reconciliationStatValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  reconciliationStatSub: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 2,
+  },
+  reconciliationStatCardSkeleton: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  reconciliationStatSkeletonText: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  reconciliationStatCardError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    marginBottom: 12,
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  reconciliationStatErrorText: {
+    flex: 1,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   reconciliationCard: {
     padding: 16,

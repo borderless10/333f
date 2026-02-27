@@ -24,6 +24,7 @@ import {
   type ReconciliationReportData,
   type CashFlowReportData,
 } from '@/lib/services/reports';
+import { exportReportToPDF } from '@/lib/services/report-pdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/hooks/use-notification';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
@@ -62,6 +63,7 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [reconciliationData, setReconciliationData] = useState<ReconciliationReportData | null>(null);
   const [cashFlowData, setCashFlowData] = useState<CashFlowReportData | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [showAccountPicker, setShowAccountPicker] = useState(false);
   const resultAnim = useRef(new Animated.Value(0)).current;
 
@@ -179,6 +181,37 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
           iconType: 'export' 
         });
       }
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!selectedReport) return;
+    const data = selectedReport === 'reconciliation' ? reconciliationData : cashFlowData;
+    if (!data) return;
+
+    setExportingPdf(true);
+    try {
+      const uri = await exportReportToPDF(data, selectedReport);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Exportar relatório (PDF)',
+        });
+        showSuccess('Relatório exportado com sucesso!', {
+          iconType: 'export',
+          duration: 3000,
+        });
+      } else {
+        showInfo('PDF gerado. Salve pelo visualizador do sistema.', {
+          iconType: 'export',
+          duration: 5000,
+        });
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Não foi possível gerar o PDF';
+      showError(message, { iconType: 'export' });
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -385,27 +418,36 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
                     <View style={styles.summaryGrid}>
                       <View style={[styles.summaryItem, styles.summaryItemHighlight]}>
                         <ThemedText style={styles.summaryLabel}>Total conciliado</ThemedText>
-                        <ThemedText type="defaultSemiBold" style={[styles.summaryValue, { color: '#10B981' }]}>
+                        <Text
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          style={[styles.summaryValueCashFlow, { color: '#10B981' }]}>
                           {formatCurrency(reconciliationData.totalConciliado)}
-                        </ThemedText>
+                        </Text>
                         <ThemedText style={styles.summaryMeta}>
                           {reconciliationData.transacoesConciliadas} trans. · {reconciliationData.titulosConciliados} tít.
                         </ThemedText>
                       </View>
                       <View style={styles.summaryItem}>
                         <ThemedText style={styles.summaryLabel}>Não conciliado</ThemedText>
-                        <ThemedText type="defaultSemiBold" style={[styles.summaryValue, { color: '#F59E0B' }]}>
+                        <Text
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          style={[styles.summaryValueCashFlow, { color: '#F59E0B' }]}>
                           {formatCurrency(reconciliationData.totalNaoConciliado)}
-                        </ThemedText>
+                        </Text>
                         <ThemedText style={styles.summaryMeta}>
                           Sobras: {formatCurrency(reconciliationData.totalSobrasValor)} · Faltas: {formatCurrency(reconciliationData.totalFaltasValor)}
                         </ThemedText>
                       </View>
                       <View style={styles.summaryItem}>
                         <ThemedText style={styles.summaryLabel}>Taxa de conciliação</ThemedText>
-                        <ThemedText type="defaultSemiBold" style={styles.summaryValue}>
+                        <Text
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          style={styles.summaryValueCashFlow}>
                           {reconciliationData.taxaConciliacao.toFixed(1)}%
-                        </ThemedText>
+                        </Text>
                       </View>
                     </View>
 
@@ -522,11 +564,19 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
                         </View>
                     )}
 
-                    <Button
-                      title="Exportar CSV"
-                      onPress={handleExportCSV}
-                      style={[styles.exportButton, styles.primaryButton]}
-                    />
+                    <View style={styles.exportRow}>
+                      <Button
+                        title="Exportar CSV"
+                        onPress={handleExportCSV}
+                        style={[styles.exportButton, styles.primaryButton]}
+                      />
+                      <Button
+                        title={exportingPdf ? 'Gerando PDF…' : 'Exportar PDF'}
+                        onPress={handleExportPDF}
+                        disabled={exportingPdf}
+                        style={[styles.exportButton, styles.primaryButton]}
+                      />
+                    </View>
                   </GlassContainer>
                 </Animated.View>
               )}
@@ -541,39 +591,54 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
                     <View style={styles.summaryGrid}>
                       <View style={styles.summaryItem}>
                         <ThemedText style={styles.summaryLabel}>Total Entradas</ThemedText>
-                        <ThemedText type="defaultSemiBold" style={[styles.summaryValue, { color: '#10B981' }]}>
+                        <Text
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          style={[styles.summaryValueCashFlow, { color: '#10B981' }]}>
                           {formatCurrency(cashFlowData.totals.totalIncome)}
-                        </ThemedText>
+                        </Text>
                       </View>
 
                       <View style={styles.summaryItem}>
                         <ThemedText style={styles.summaryLabel}>Total Saídas</ThemedText>
-                        <ThemedText type="defaultSemiBold" style={[styles.summaryValue, { color: '#EF4444' }]}>
+                        <Text
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          style={[styles.summaryValueCashFlow, { color: '#EF4444' }]}>
                           {formatCurrency(cashFlowData.totals.totalExpense)}
-                        </ThemedText>
+                        </Text>
                       </View>
 
                       <View style={styles.summaryItem}>
                         <ThemedText style={styles.summaryLabel}>Saldo Líquido</ThemedText>
-                        <ThemedText
-                          type="defaultSemiBold"
+                        <Text
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
                           style={[
-                            styles.summaryValue,
+                            styles.summaryValueCashFlow,
                             {
                               color:
                                 cashFlowData.totals.netBalance >= 0 ? '#10B981' : '#EF4444',
                             },
                           ]}>
                           {formatCurrency(cashFlowData.totals.netBalance)}
-                        </ThemedText>
+                        </Text>
                       </View>
                     </View>
 
-                    <Button
-                      title="Exportar CSV"
-                      onPress={handleExportCSV}
-                      style={[styles.exportButton, styles.primaryButton]}
-                    />
+                    <View style={styles.exportRow}>
+                      <Button
+                        title="Exportar CSV"
+                        onPress={handleExportCSV}
+                        style={[styles.exportButton, styles.primaryButton]}
+                      />
+                      <Button
+                        title={exportingPdf ? 'Gerando PDF…' : 'Exportar PDF'}
+                        onPress={handleExportPDF}
+                        disabled={exportingPdf}
+                        style={[styles.exportButton, styles.primaryButton]}
+                      />
+                    </View>
                   </GlassContainer>
                 </View>
               )}
@@ -758,8 +823,19 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
   },
-  exportButton: {
+  summaryValueCashFlow: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  exportRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginTop: 8,
+  },
+  exportButton: {
+    flex: 1,
+    marginTop: 0,
   },
   reportSection: {
     marginTop: 20,

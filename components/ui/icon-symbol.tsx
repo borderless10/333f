@@ -67,10 +67,14 @@ const MAPPING = {
   'link.circle.fill': 'link',
   'doc.text.fill': 'description',
   'square.and.arrow.up.fill': 'file-upload',
+  'square.and.arrow.up': 'file-upload',
   'sparkles': 'auto-awesome',
   'line.3.horizontal.decrease': 'filter-list',
   'hourglass': 'hourglass-empty',
   'creditcard.fill': 'credit-card',
+  'percent': 'percent',
+  'arrow.down.doc.fill': 'file-download',
+  'doc.badge.plus': 'note-add',
 } as IconMapping;
 
 /**
