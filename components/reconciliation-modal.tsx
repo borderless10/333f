@@ -264,7 +264,7 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
           showInfo(
-            `${suggestionsList.length} ${suggestionsList.length === 1 ? 'sugestão encontrada' : 'sugestões encontradas'}! Toque para conciliar.`,
+            `${suggestionsList.length} ${suggestionsList.length === 1 ? 'sugestão encontrada' : 'sugestões encontradas'}!`,
             {
               iconType: 'auto_match',
               title: 'Match automático',
