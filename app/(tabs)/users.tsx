@@ -518,7 +518,6 @@ export default function UsersScreen() {
             )}
           </ScrollView>
         )}
-        <Toast config={toastConfig} topOffset={60} />
 
         {/* Modal de Alterar Perfil */}
         <Modal

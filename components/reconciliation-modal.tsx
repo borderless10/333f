@@ -1,6 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/hooks/use-notification';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
+import * as Haptics from 'expo-haptics';
 import {
   createReconciliation,
   generateMatchSuggestions,
@@ -29,11 +30,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedBackground } from './animated-background';
 import { GlassContainer } from './glass-container';
+import { SobrasFaltasListView } from './sobras-faltas-list-view';
+import { SobrasFaltasSection, type SobrasFaltasSummary } from './sobras-faltas-section';
 import { ThemedText } from './themed-text';
 import { IconSymbol } from './ui/icon-symbol';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from './NotificationToast';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const COLUMN_WIDTH = (SCREEN_WIDTH - 64) / 2; // 16px padding de cada lado + 16px gap + 16px modal padding
+const COLUMN_GAP = 10;
+const COLUMN_PADDING = 10;
+const CARD_MIN_WIDTH = 120;
 
 interface ReconciliationModalProps {
   visible: boolean;
@@ -44,7 +51,7 @@ interface ReconciliationModalProps {
 export function ReconciliationModal({ visible, onClose, onSuccess }: ReconciliationModalProps) {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
 
   const [transactions, setTransactions] = useState<TransactionWithAccount[]>([]);
   const [titles, setTitles] = useState<TitleWithAccount[]>([]);
@@ -57,8 +64,8 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
   const [filterAccount, setFilterAccount] = useState<number | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [matchWasRunWithZeroSuggestions, setMatchWasRunWithZeroSuggestions] = useState(false);
-  const [sobrasExpanded, setSobrasExpanded] = useState(false);
-  const [faltasExpanded, setFaltasExpanded] = useState(false);
+  const [listViewMode, setListViewMode] = useState<'sobras' | 'faltas' | null>(null);
+  const [sobrasFaltasActiveTab, setSobrasFaltasActiveTab] = useState<'sobras' | 'faltas' | null>(null);
 
   // Animações
   const leftColumnAnim = useRef(new Animated.Value(0)).current;
@@ -89,8 +96,8 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
       setLoading(false);
       setMatching(false);
       setMatchWasRunWithZeroSuggestions(false);
-      setSobrasExpanded(false);
-      setFaltasExpanded(false);
+      setListViewMode(null);
+      setSobrasFaltasActiveTab(null);
     }
   }, [visible, userId]);
 
@@ -251,6 +258,21 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
         setSuggestions(suggestionsList);
         setMatchWasRunWithZeroSuggestions(suggestionsList.length === 0);
 
+        // Notificação quando match automático encontra sugestões
+        if (suggestionsList.length > 0) {
+          if (Platform.OS !== 'web') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          showInfo(
+            `${suggestionsList.length} ${suggestionsList.length === 1 ? 'sugestão encontrada' : 'sugestões encontradas'}! Toque para conciliar.`,
+            {
+              iconType: 'auto_match',
+              title: 'Match automático',
+              duration: 4000,
+            }
+          );
+        }
+
         // Resetar e animar SEM callbacks
         try {
           suggestionAnim.setValue(0);
@@ -298,10 +320,13 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
         
         const transactionDesc = transaction?.descricao || 'Transação';
         const titleDesc = title?.fornecedor_cliente || 'Título';
-        
+
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
         showSuccess(`${transactionDesc} ↔ ${titleDesc}`, {
           iconType: isAutoMatch ? 'auto_match' : 'reconciliation',
-          title: 'Nova conciliação registrada',
+          title: 'Conciliação concluída',
           duration: 4000,
         });
         
@@ -411,24 +436,6 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
     ],
   }), [suggestionAnim]);
 
-  // Animação de entrada da seção Sobras/Faltas
-  const sobrasFaltasSectionStyle = useMemo(
-    () => ({
-      opacity: sobrasFaltasAnim,
-      transform: [
-        {
-          translateY: sobrasFaltasAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [12, 0],
-          }),
-        },
-      ],
-    }),
-    [sobrasFaltasAnim]
-  );
-
-  const SOBRAS_FALTAS_PREVIEW = 5;
-
   return (
     <Modal
       visible={visible}
@@ -439,14 +446,67 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
         <View style={[styles.modalContent, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
           <AnimatedBackground />
           <View style={styles.modalHeader}>
-            <ThemedText type="title" style={styles.modalTitle}>
-              Conciliação Bancária
-            </ThemedText>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <IconSymbol name="xmark.circle.fill" size={28} color="#FFFFFF" />
-            </TouchableOpacity>
+            {listViewMode ? (
+              <>
+                <TouchableOpacity
+                  onPress={() => setListViewMode(null)}
+                  style={styles.backButton}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+                <ThemedText type="title" style={[styles.modalTitle, styles.modalTitleWithBack]}>
+                  {listViewMode === 'sobras' ? 'Sobras' : 'Faltas'}
+                </ThemedText>
+                <View style={styles.closeButtonPlaceholder} />
+              </>
+            ) : (
+              <>
+                <ThemedText type="title" style={styles.modalTitle}>
+                  Conciliação Bancária
+                </ThemedText>
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <IconSymbol name="xmark.circle.fill" size={28} color="#FFFFFF" />
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
+          {/* Lista dedicada: Sobras ou Faltas */}
+          {listViewMode && !loading && (
+            <View style={styles.dedicatedListContainer}>
+              <SobrasFaltasListView
+                mode={listViewMode}
+                items={
+                  listViewMode === 'sobras'
+                    ? sobrasFaltasSummary.sobras.items
+                    : sobrasFaltasSummary.faltas.items
+                }
+                total={
+                  listViewMode === 'sobras'
+                    ? sobrasFaltasSummary.sobras.total
+                    : sobrasFaltasSummary.faltas.total
+                }
+                onSelectTransaction={(id) => {
+                  setSelectedTransaction(id);
+                  setSelectedTitle(null);
+                  setListViewMode(null);
+                }}
+                onSelectTitle={(id) => {
+                  setSelectedTitle(id);
+                  setSelectedTransaction(null);
+                  setListViewMode(null);
+                }}
+              />
+            </View>
+          )}
+
+          {/* Conteúdo principal (quando não está na lista dedicada) */}
+          {!listViewMode && (
+            <ScrollView
+              style={styles.mainScroll}
+              contentContainerStyle={styles.mainScrollContent}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled">
           {/* Filtros e Ações */}
           <View style={styles.actionsRow}>
             <GlassContainer style={styles.filterContainer}>
@@ -482,7 +542,29 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
                 {matching ? 'Buscando...' : 'Match Automático'}
               </Text>
             </TouchableOpacity>
+            {(selectedTransaction || selectedTitle) && (
+              <TouchableOpacity
+                style={styles.clearSelectionButton}
+                onPress={() => {
+                  setSelectedTransaction(null);
+                  setSelectedTitle(null);
+                }}
+                activeOpacity={0.7}>
+                <IconSymbol name="xmark.circle.fill" size={16} color="rgba(255, 255, 255, 0.7)" />
+                <Text style={styles.clearSelectionText}>Limpar</Text>
+              </TouchableOpacity>
+            )}
           </View>
+
+          {/* Dica de uso */}
+          {!loading && (transactions.length > 0 || titles.length > 0) && (
+            <View style={styles.hintBar}>
+              <IconSymbol name="info.circle.fill" size={14} color="rgba(255, 255, 255, 0.5)" />
+              <ThemedText style={styles.hintText} numberOfLines={2}>
+                Selecione um item de cada coluna e toque em Conciliar
+              </ThemedText>
+            </View>
+          )}
 
           {/* Aviso quando não há sugestões de match (só na tela de conciliação) */}
           {!loading && !matching && matchWasRunWithZeroSuggestions && suggestions.length === 0 && (
@@ -502,209 +584,23 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
           )}
 
           {/* Seção explícita: Sobras e Faltas — listas dedicadas */}
-          {!loading && (
-            <Animated.View style={[styles.sobrasFaltasSection, sobrasFaltasSectionStyle]}>
-              <View style={styles.sobrasFaltasHeader}>
-                <View style={styles.sobrasFaltasTitleRow}>
-                  <IconSymbol name="arrow.left.arrow.right.circle.fill" size={20} color="#00b09b" />
-                  <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasTitle}>
-                    Sobras e Faltas
-                  </ThemedText>
-                </View>
-                <ThemedText style={styles.sobrasFaltasSubtitle}>
-                  Transações e títulos pendentes de conciliação. Concilie nas colunas abaixo.
-                </ThemedText>
-              </View>
-
-              <View style={styles.sobrasFaltasCards}>
-                {/* Sobras: transações no extrato sem título no ERP */}
-                <GlassContainer style={StyleSheet.flatten([styles.sobrasFaltasCard, styles.sobrasFaltasCardSobras])}>
-                  <View style={[styles.sobrasFaltasCardIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-                    <IconSymbol name="building.columns.fill" size={22} color="#10B981" />
-                  </View>
-                  <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasCardLabel}>
-                    Sobras
-                  </ThemedText>
-                  <ThemedText style={styles.sobrasFaltasCardDesc}>
-                    Transações no extrato sem título no ERP
-                  </ThemedText>
-                  <View style={styles.sobrasFaltasCardStats}>
-                    <View style={styles.sobrasFaltasBadge}>
-                      <Text style={styles.sobrasFaltasBadgeText}>
-                        {sobrasFaltasSummary.sobras.count} {sobrasFaltasSummary.sobras.count === 1 ? 'item' : 'itens'}
-                      </Text>
-                    </View>
-                    <Text
-                      style={[
-                        styles.sobrasFaltasTotal,
-                        { color: sobrasFaltasSummary.sobras.total >= 0 ? '#10B981' : '#EF4444' },
-                      ]}>
-                      {formatCurrency(Math.abs(sobrasFaltasSummary.sobras.total))}
-                      {sobrasFaltasSummary.sobras.total < 0 && ' (-)'}
-                    </Text>
-                  </View>
-                  {sobrasFaltasSummary.sobras.items.length > 0 ? (
-                    <>
-                      <ScrollView
-                        style={[
-                          styles.sobrasFaltasList,
-                          sobrasExpanded && styles.sobrasFaltasListExpanded,
-                        ]}
-                        showsVerticalScrollIndicator={false}
-                        nestedScrollEnabled>
-                        {(sobrasExpanded
-                          ? sobrasFaltasSummary.sobras.items
-                          : sobrasFaltasSummary.sobras.items.slice(0, SOBRAS_FALTAS_PREVIEW)
-                        ).map((item, idx) => (
-                          <View
-                            key={item.id}
-                            style={[
-                              styles.sobrasFaltasListItem,
-                              idx === 0 && styles.sobrasFaltasListItemFirst,
-                            ]}>
-                            <View style={styles.sobrasFaltasItemHeader}>
-                              <IconSymbol name="building.columns.fill" size={12} color="rgba(16, 185, 129, 0.9)" />
-                              <ThemedText style={styles.sobrasFaltasItemDesc} numberOfLines={1}>
-                                {item.descricao?.trim() || 'Transação sem descrição'}
-                              </ThemedText>
-                            </View>
-                            <View style={styles.sobrasFaltasItemRow}>
-                              <Text style={styles.sobrasFaltasItemDate}>{formatDate(item.data)}</Text>
-                              <Text
-                                style={[
-                                  styles.sobrasFaltasItemValor,
-                                  { color: item.tipo === 'receita' ? '#10B981' : '#EF4444' },
-                                ]}>
-                                {item.tipo === 'receita' ? '+' : '-'}{formatCurrency(item.valor)}
-                              </Text>
-                            </View>
-                          </View>
-                        ))}
-                      </ScrollView>
-                      {sobrasFaltasSummary.sobras.items.length > SOBRAS_FALTAS_PREVIEW && (
-                        <TouchableOpacity
-                          style={styles.sobrasFaltasVerTodos}
-                          onPress={() => setSobrasExpanded((e) => !e)}
-                          activeOpacity={0.7}>
-                          <ThemedText style={styles.sobrasFaltasVerTodosText}>
-                            {sobrasExpanded
-                              ? 'Recolher'
-                              : `Ver todos (${sobrasFaltasSummary.sobras.items.length})`}
-                          </ThemedText>
-                          <IconSymbol
-                            name={sobrasExpanded ? 'chevron.up' : 'chevron.right'}
-                            size={14}
-                            color="#10B981"
-                          />
-                        </TouchableOpacity>
-                      )}
-                    </>
-                  ) : (
-                    <View style={styles.sobrasFaltasEmpty}>
-                      <IconSymbol name="checkmark.circle.fill" size={32} color="rgba(16, 185, 129, 0.6)" />
-                      <ThemedText style={styles.sobrasFaltasEmptyText}>Nenhuma sobra</ThemedText>
-                      <ThemedText style={styles.sobrasFaltasEmptySubtext}>
-                        Todas as transações do extrato têm título no ERP
-                      </ThemedText>
-                    </View>
-                  )}
-                </GlassContainer>
-
-                {/* Faltas: títulos no ERP sem transação no extrato */}
-                <GlassContainer style={StyleSheet.flatten([styles.sobrasFaltasCard, styles.sobrasFaltasCardFaltas])}>
-                  <View style={[styles.sobrasFaltasCardIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
-                    <IconSymbol name="doc.text.fill" size={22} color="#6366F1" />
-                  </View>
-                  <ThemedText type="defaultSemiBold" style={styles.sobrasFaltasCardLabel}>
-                    Faltas
-                  </ThemedText>
-                  <ThemedText style={styles.sobrasFaltasCardDesc}>
-                    Títulos no ERP sem transação no extrato
-                  </ThemedText>
-                  <View style={styles.sobrasFaltasCardStats}>
-                    <View style={[styles.sobrasFaltasBadge, styles.sobrasFaltasBadgeFaltas]}>
-                      <Text style={[styles.sobrasFaltasBadgeText, styles.sobrasFaltasBadgeTextFaltas]}>
-                        {sobrasFaltasSummary.faltas.count} {sobrasFaltasSummary.faltas.count === 1 ? 'item' : 'itens'}
-                      </Text>
-                    </View>
-                    <Text
-                      style={[
-                        styles.sobrasFaltasTotal,
-                        { color: sobrasFaltasSummary.faltas.total >= 0 ? '#10B981' : '#EF4444' },
-                      ]}>
-                      {formatCurrency(Math.abs(sobrasFaltasSummary.faltas.total))}
-                      {sobrasFaltasSummary.faltas.total < 0 && ' (-)'}
-                    </Text>
-                  </View>
-                  {sobrasFaltasSummary.faltas.items.length > 0 ? (
-                    <>
-                      <ScrollView
-                        style={[
-                          styles.sobrasFaltasList,
-                          faltasExpanded && styles.sobrasFaltasListExpanded,
-                        ]}
-                        showsVerticalScrollIndicator={false}
-                        nestedScrollEnabled>
-                        {(faltasExpanded
-                          ? sobrasFaltasSummary.faltas.items
-                          : sobrasFaltasSummary.faltas.items.slice(0, SOBRAS_FALTAS_PREVIEW)
-                        ).map((item, idx) => (
-                          <View
-                            key={item.id}
-                            style={[
-                              styles.sobrasFaltasListItem,
-                              idx === 0 && styles.sobrasFaltasListItemFirst,
-                            ]}>
-                            <View style={styles.sobrasFaltasItemHeader}>
-                              <IconSymbol name="doc.text.fill" size={12} color="rgba(99, 102, 241, 0.9)" />
-                              <ThemedText style={styles.sobrasFaltasItemDesc} numberOfLines={1}>
-                                {item.fornecedor_cliente?.trim() || item.descricao?.trim() || 'Título sem identificação'}
-                              </ThemedText>
-                            </View>
-                            <View style={styles.sobrasFaltasItemRow}>
-                              <Text style={styles.sobrasFaltasItemDate}>{formatDate(item.data_vencimento)}</Text>
-                              <Text
-                                style={[
-                                  styles.sobrasFaltasItemValor,
-                                  { color: item.tipo === 'receber' ? '#10B981' : '#EF4444' },
-                                ]}>
-                                {item.tipo === 'receber' ? '+' : '-'}{formatCurrency(item.valor)}
-                              </Text>
-                            </View>
-                          </View>
-                        ))}
-                      </ScrollView>
-                      {sobrasFaltasSummary.faltas.items.length > SOBRAS_FALTAS_PREVIEW && (
-                        <TouchableOpacity
-                          style={[styles.sobrasFaltasVerTodos, styles.sobrasFaltasVerTodosFaltas]}
-                          onPress={() => setFaltasExpanded((e) => !e)}
-                          activeOpacity={0.7}>
-                          <ThemedText style={styles.sobrasFaltasVerTodosTextFaltas}>
-                            {faltasExpanded
-                              ? 'Recolher'
-                              : `Ver todos (${sobrasFaltasSummary.faltas.items.length})`}
-                          </ThemedText>
-                          <IconSymbol
-                            name={faltasExpanded ? 'chevron.up' : 'chevron.right'}
-                            size={14}
-                            color="#6366F1"
-                          />
-                        </TouchableOpacity>
-                      )}
-                    </>
-                  ) : (
-                    <View style={styles.sobrasFaltasEmpty}>
-                      <IconSymbol name="checkmark.circle.fill" size={32} color="rgba(99, 102, 241, 0.6)" />
-                      <ThemedText style={styles.sobrasFaltasEmptyText}>Nenhuma falta</ThemedText>
-                      <ThemedText style={styles.sobrasFaltasEmptySubtext}>
-                        Todos os títulos do ERP têm transação no extrato
-                      </ThemedText>
-                    </View>
-                  )}
-                </GlassContainer>
-              </View>
-            </Animated.View>
-          )}
+          <SobrasFaltasSection
+            summary={sobrasFaltasSummary}
+            loading={loading}
+            activeTab={sobrasFaltasActiveTab}
+            onTabChange={setSobrasFaltasActiveTab}
+            onSelectTransaction={(id) => {
+              setSelectedTransaction(id);
+              setSelectedTitle(null);
+            }}
+            onSelectTitle={(id) => {
+              setSelectedTitle(id);
+              setSelectedTransaction(null);
+            }}
+            onViewFullList={setListViewMode}
+            style={styles.sobrasFaltasSection}
+            animateIn={sobrasFaltasAnim}
+          />
 
           {/* Sugestões */}
           {visibleSuggestions.length > 0 && (
@@ -791,9 +687,12 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
 
                 <ScrollView
                   style={styles.columnScroll}
-                  contentContainerStyle={styles.columnContent}
-                  showsVerticalScrollIndicator={false}
-                  nestedScrollEnabled>
+                  contentContainerStyle={[styles.columnContent, styles.columnScrollContent]}
+                  showsVerticalScrollIndicator={true}
+                  scrollEventThrottle={16}
+                  nestedScrollEnabled
+                  bounces={false}
+                  {...(Platform.OS === 'android' && { overScrollMode: 'never' as const })}>
                   {transactions.length === 0 ? (
                     <View style={styles.emptyColumn}>
                       <IconSymbol name="checkmark.circle" size={28} color="rgba(255, 255, 255, 0.3)" />
@@ -814,10 +713,10 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
                           ]}
                           onPress={() => handleSelectTransaction(transaction.id!)}
                           activeOpacity={0.7}>
-                          <View style={styles.itemHeader}>
+                          <View style={styles.itemIcon}>
                             <View
                               style={[
-                                styles.itemIcon,
+                                styles.itemIconInner,
                                 {
                                   backgroundColor:
                                     transaction.tipo === 'receita'
@@ -827,34 +726,42 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
                               ]}>
                               <IconSymbol
                                 name={transaction.tipo === 'receita' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'}
-                                size={14}
+                                size={12}
                                 color={transaction.tipo === 'receita' ? '#10B981' : '#EF4444'}
                               />
                             </View>
-                            <View style={styles.itemInfo}>
-                              <ThemedText type="defaultSemiBold" style={styles.itemDescription} numberOfLines={1}>
-                                {transaction.descricao}
-                              </ThemedText>
-                              <ThemedText style={styles.itemMeta} numberOfLines={1}>
-                                {formatDate(transaction.data)}
-                              </ThemedText>
-                            </View>
-                            {suggestion && (
-                              <View style={styles.suggestionIndicator}>
-                                <IconSymbol name="sparkles" size={10} color="#00b09b" />
-                              </View>
-                            )}
                           </View>
-                          <Text
-                            style={[
-                              styles.itemValue,
-                              {
-                                color: transaction.tipo === 'receita' ? '#10B981' : '#EF4444',
-                              },
-                            ]}>
-                            {transaction.tipo === 'receita' ? '+' : '-'}
-                            {formatCurrency(transaction.valor)}
-                          </Text>
+                          <View style={styles.itemContent}>
+                            <ThemedText type="defaultSemiBold" style={styles.itemDescription} numberOfLines={2} ellipsizeMode="tail">
+                              {transaction.descricao || '—'}
+                            </ThemedText>
+                            <View style={styles.itemBottomSection}>
+                              <View style={styles.itemMetaRow}>
+                                <ThemedText style={styles.itemMeta}>
+                                  {formatDate(transaction.data)}
+                                </ThemedText>
+                                <View style={styles.pendenteBadge}>
+                                  <Text style={styles.pendenteBadgeText} numberOfLines={1}>Pendente</Text>
+                                </View>
+                              </View>
+                              <Text
+                                style={[
+                                  styles.itemValue,
+                                  { color: transaction.tipo === 'receita' ? '#10B981' : '#EF4444' },
+                                ]}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                                adjustsFontSizeToFit={true}>
+                                {transaction.tipo === 'receita' ? '+' : '-'}
+                                {formatCurrency(transaction.valor)}
+                              </Text>
+                            </View>
+                          </View>
+                          {suggestion && (
+                            <View style={styles.suggestionIndicator}>
+                              <IconSymbol name="sparkles" size={10} color="#00b09b" />
+                            </View>
+                          )}
                         </TouchableOpacity>
                       );
                     })
@@ -892,9 +799,12 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
 
                 <ScrollView
                   style={styles.columnScroll}
-                  contentContainerStyle={styles.columnContent}
-                  showsVerticalScrollIndicator={false}
-                  nestedScrollEnabled>
+                  contentContainerStyle={[styles.columnContent, styles.columnScrollContent]}
+                  showsVerticalScrollIndicator={true}
+                  scrollEventThrottle={16}
+                  nestedScrollEnabled
+                  bounces={false}
+                  {...(Platform.OS === 'android' && { overScrollMode: 'never' as const })}>
                   {titles.length === 0 ? (
                     <View style={styles.emptyColumn}>
                       <IconSymbol name="checkmark.circle" size={28} color="rgba(255, 255, 255, 0.3)" />
@@ -915,10 +825,10 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
                           ]}
                           onPress={() => handleSelectTitle(title.id!)}
                           activeOpacity={0.7}>
-                          <View style={styles.itemHeader}>
+                          <View style={styles.itemIcon}>
                             <View
                               style={[
-                                styles.itemIcon,
+                                styles.itemIconInner,
                                 {
                                   backgroundColor:
                                     title.tipo === 'receber'
@@ -928,34 +838,42 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
                               ]}>
                               <IconSymbol
                                 name={title.tipo === 'receber' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'}
-                                size={14}
+                                size={12}
                                 color={title.tipo === 'receber' ? '#10B981' : '#EF4444'}
                               />
                             </View>
-                            <View style={styles.itemInfo}>
-                              <ThemedText type="defaultSemiBold" style={styles.itemDescription} numberOfLines={1}>
-                                {title.fornecedor_cliente}
-                              </ThemedText>
-                              <ThemedText style={styles.itemMeta} numberOfLines={1}>
-                                {formatDate(title.data_vencimento)}
-                              </ThemedText>
-                            </View>
-                            {suggestion && (
-                              <View style={styles.suggestionIndicator}>
-                                <IconSymbol name="sparkles" size={10} color="#00b09b" />
-                              </View>
-                            )}
                           </View>
-                          <Text
-                            style={[
-                              styles.itemValue,
-                              {
-                                color: title.tipo === 'receber' ? '#10B981' : '#EF4444',
-                              },
-                            ]}>
-                            {title.tipo === 'receber' ? '+' : '-'}
-                            {formatCurrency(title.valor)}
-                          </Text>
+                          <View style={styles.itemContent}>
+                            <ThemedText type="defaultSemiBold" style={styles.itemDescription} numberOfLines={2} ellipsizeMode="tail">
+                              {title.fornecedor_cliente || '—'}
+                            </ThemedText>
+                            <View style={styles.itemBottomSection}>
+                              <View style={styles.itemMetaRow}>
+                                <ThemedText style={styles.itemMeta}>
+                                  {formatDate(title.data_vencimento)}
+                                </ThemedText>
+                                <View style={styles.pendenteBadge}>
+                                  <Text style={styles.pendenteBadgeText} numberOfLines={1}>Pendente</Text>
+                                </View>
+                              </View>
+                              <Text
+                                style={[
+                                  styles.itemValue,
+                                  { color: title.tipo === 'receber' ? '#10B981' : '#EF4444' },
+                                ]}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                                adjustsFontSizeToFit={true}>
+                                {title.tipo === 'receber' ? '+' : '-'}
+                                {formatCurrency(title.valor)}
+                              </Text>
+                            </View>
+                          </View>
+                          {suggestion && (
+                            <View style={styles.suggestionIndicator}>
+                              <IconSymbol name="sparkles" size={10} color="#00b09b" />
+                            </View>
+                          )}
                         </TouchableOpacity>
                       );
                     })
@@ -977,8 +895,11 @@ export function ReconciliationModal({ visible, onClose, onSuccess }: Reconciliat
               </TouchableOpacity>
             </View>
           )}
+            </ScrollView>
+          )}
         </View>
       </View>
+      <Toast config={toastConfig} topOffset={60} />
     </Modal>
   );
 }
@@ -1005,8 +926,111 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 24,
   },
+  modalTitleWithBack: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  backButton: {
+    padding: 4,
+  },
+  closeButtonPlaceholder: {
+    width: 36,
+  },
   closeButton: {
     padding: 4,
+  },
+  dedicatedListContainer: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  dedicatedListHeader: {
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  dedicatedListSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.65)',
+    marginBottom: 10,
+  },
+  dedicatedListStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dedicatedListBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  dedicatedListBadgeFaltas: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  dedicatedListBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  dedicatedListBadgeTextFaltas: {
+    color: '#6366F1',
+  },
+  dedicatedListTotal: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  dedicatedListScroll: {
+    flex: 1,
+  },
+  dedicatedListContent: {
+    paddingBottom: 24,
+  },
+  dedicatedListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  dedicatedListItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    gap: 12,
+  },
+  dedicatedListItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dedicatedListItemInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  dedicatedListItemDesc: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  dedicatedListItemMeta: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  dedicatedListItemValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginLeft: 12,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -1044,6 +1068,48 @@ const styles = StyleSheet.create({
   },
   matchButtonTextDisabled: {
     color: 'rgba(255, 255, 255, 0.5)',
+  },
+  clearSelectionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  clearSelectionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  mainScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  mainScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
+  },
+  hintBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  hintText: {
+    flex: 1,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+    lineHeight: 18,
+    minWidth: 0,
   },
   suggestionsContainer: {
     paddingHorizontal: 16,
@@ -1118,14 +1184,16 @@ const styles = StyleSheet.create({
   },
   columnsContainer: {
     flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
-    flex: 1,
-    minHeight: 0, // Permite que o flex funcione corretamente
+    gap: COLUMN_GAP,
+    paddingHorizontal: COLUMN_PADDING,
+    marginTop: 8,
+    minHeight: 320,
+    flexGrow: 1,
   },
   column: {
     flex: 1,
-    minHeight: 0, // Permite que o ScrollView interno funcione corretamente
+    minWidth: CARD_MIN_WIDTH,
+    minHeight: 280,
   },
   columnHeader: {
     padding: 10,
@@ -1154,10 +1222,13 @@ const styles = StyleSheet.create({
   },
   columnScroll: {
     flex: 1,
-    minHeight: 0, // Permite que o ScrollView funcione corretamente
+    minHeight: 240,
   },
   columnContent: {
     gap: 6,
+  },
+  columnScrollContent: {
+    paddingBottom: 24,
   },
   emptyColumn: {
     padding: 24,
@@ -1171,15 +1242,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   itemCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     padding: 10,
     borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     marginBottom: 6,
+    overflow: 'hidden',
   },
   itemCardSelected: {
-    backgroundColor: 'rgba(0, 176, 155, 0.2)',
+    backgroundColor: 'rgba(0, 176, 155, 0.15)',
     borderColor: '#00b09b',
     borderWidth: 2,
   },
@@ -1187,39 +1261,61 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 176, 155, 0.5)',
     borderWidth: 1.5,
   },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
   itemIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    marginRight: 8,
+  },
+  itemIconInner: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemInfo: {
+  itemContent: {
     flex: 1,
     minWidth: 0,
+    overflow: 'hidden',
   },
   itemDescription: {
     fontSize: 12,
     color: '#FFFFFF',
-    marginBottom: 2,
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  itemBottomSection: {
+    flexDirection: 'column',
+    gap: 6,
+    minWidth: 0,
+  },
+  itemMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
   },
   itemMeta: {
     fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: 'rgba(255, 255, 255, 0.55)',
+  },
+  pendenteBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  pendenteBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#F59E0B',
   },
   suggestionIndicator: {
-    padding: 2,
+    marginLeft: 2,
   },
   itemValue: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
-    textAlign: 'right',
+    letterSpacing: 0.3,
+    minWidth: 0,
   },
   reconcileButtonContainer: {
     paddingHorizontal: 16,
@@ -1283,7 +1379,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-    marginBottom: 4,
+    marginBottom: 20,
+    flexShrink: 0,
   },
   sobrasFaltasHeader: {
     marginBottom: 12,

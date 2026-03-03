@@ -81,7 +81,7 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const { selectedCompany } = useCompany();
-  const { showSuccess, showError, showInfo } = useNotification();
+  const { showSuccess, showError } = useNotification();
 
   // Animações
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -503,6 +503,26 @@ export default function DashboardScreen() {
               });
             } catch (error: any) {
               showError(error.message || 'Não foi possível exportar o relatório');
+            } finally {
+              setExportingReport(false);
+            }
+          },
+        },
+        {
+          text: 'PDF',
+          onPress: async () => {
+            try {
+              setExportingReport(true);
+              const report = await generateReconciliationReport(userId);
+              const empresaNome = selectedCompany?.nome_fantasia || selectedCompany?.razao_social;
+              await shareReconciliationReport(report, 'pdf', {
+                empresaNome: empresaNome || undefined,
+              });
+              showSuccess('PDF exportado com sucesso!', {
+                iconType: 'export',
+              });
+            } catch (error: any) {
+              showError(error.message || 'Não foi possível exportar o PDF');
             } finally {
               setExportingReport(false);
             }
@@ -1277,11 +1297,6 @@ export default function DashboardScreen() {
               onPress={() => {
                 if (!reconciliationVisible) {
                   setReconciliationVisible(true);
-                  showInfo('Selecione uma transação (Banco) e um título (ERP) para conciliar', {
-                    iconType: 'reconciliation',
-                    title: 'Conciliação bancária aberta',
-                    duration: 3500,
-                  });
                 }
               }}
               activeOpacity={0.8}>

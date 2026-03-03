@@ -46,11 +46,23 @@ function formatDatePdf(s: string): string {
   }
 }
 
+export interface ReportPDFOptions {
+  empresaNome?: string;
+  empresaLogoBase64?: string;
+}
+
 /**
  * Gera HTML do relatório Conciliado x Não Conciliado para PDF
  */
-function buildReconciliationReportHTML(data: ReconciliationReportData): string {
+function buildReconciliationReportHTML(data: ReconciliationReportData, options: ReportPDFOptions = {}): string {
+  const { empresaNome, empresaLogoBase64 } = options;
   const periodText = `Período: ${formatDatePdf(data.period.start)} a ${formatDatePdf(data.period.end)}`;
+
+  const logoHtml = empresaLogoBase64
+    ? `<img src="data:image/png;base64,${empresaLogoBase64}" alt="Logo" style="height:48px;max-width:120px;object-fit:contain;margin-right:16px;" />`
+    : `<div style="width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,#00b09b 0%,#00d4aa 100%);display:flex;align-items:center;justify-content:center;margin-right:16px;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M12 2L4 7v10l8 5 8-5V7l-8-5zm0 2.5l5.5 3.44L12 11.5 6.5 7.94 12 4.5zM6 9.06l5 3.13v6.25L6 15.31V9.06zm12 0v6.25l-5 3.13v-6.25l5-3.13z"/></svg>
+       </div>`;
 
   const conciliadosRows =
     data.conciliados.length === 0
@@ -106,8 +118,14 @@ function buildReconciliationReportHTML(data: ReconciliationReportData): string {
   <style>${PDF_STYLES}</style>
 </head>
 <body>
-  <h1>Relatório Conciliado x Não Conciliado</h1>
-  <p class="period">${periodText}</p>
+  <div style="display:flex;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:3px solid #00b09b;">
+    ${logoHtml}
+    <div>
+      <h1 style="font-size:18px;margin:0 0 2px 0;color:#0a192f;">${escapeHtml(empresaNome || 'Relatório de Conciliação')}</h1>
+      <p style="font-size:12px;color:#64748b;margin:0;">Conciliação Bancária</p>
+      <p class="period">${periodText}</p>
+    </div>
+  </div>
 
   <div class="section">
     <div class="section-title">Resumo</div>
@@ -233,11 +251,12 @@ export type ReportTypePDF = 'reconciliation' | 'cashflow';
  */
 export async function exportReportToPDF(
   reportData: ReconciliationReportData | CashFlowReportData,
-  type: ReportTypePDF
+  type: ReportTypePDF,
+  options?: ReportPDFOptions
 ): Promise<string> {
   const html =
     type === 'reconciliation'
-      ? buildReconciliationReportHTML(reportData as ReconciliationReportData)
+      ? buildReconciliationReportHTML(reportData as ReconciliationReportData, options ?? {})
       : buildCashFlowReportHTML(reportData as CashFlowReportData);
 
   const { uri } = await Print.printToFileAsync({

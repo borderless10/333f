@@ -58,12 +58,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   /**
-   * Verifica se há sessão ativa ao carregar o app
+   * Verifica se há sessão ativa ao carregar o app.
+   * Define loading = false assim que a sessão é conhecida, para não travar o app
+   * se getSession ou loadUserRole demorarem (rede/Supabase). O role carrega em background.
    */
   useEffect(() => {
+    const SESSION_TIMEOUT_MS = 8000;
+
     const initAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout ao obter sessão')), SESSION_TIMEOUT_MS)
+        );
+        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]);
         
         if (error) {
           console.error('Erro ao buscar sessão:', error);
@@ -74,14 +82,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         setUser(session?.user ?? null);
         setUserId(session?.user?.id ?? null);
-        
+        setLoading(false); // Libera a tela logo; role pode carregar em background
+
         if (session?.user?.id) {
-          await loadUserRole(session.user.id);
+          loadUserRole(session.user.id).catch((e) => {
+            console.error('Erro ao carregar perfil na inicialização:', e);
+            setRoleLoading(false);
+          });
         } else {
           setRoleLoading(false);
         }
-        
-        setLoading(false);
       } catch (err) {
         console.error('Erro ao inicializar auth:', err);
         setUser(null);

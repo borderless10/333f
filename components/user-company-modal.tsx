@@ -19,6 +19,8 @@ import { AnimatedBackground } from './animated-background';
 import { GlassContainer } from './glass-container';
 import { ThemedText } from './themed-text';
 import { IconSymbol } from './ui/icon-symbol';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from './NotificationToast';
 import { Button } from './ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/hooks/use-notification';
@@ -345,6 +347,7 @@ export function UserCompanyModal({
           </View>
         </View>
       </View>
+      <Toast config={toastConfig} topOffset={60} />
     </Modal>
   );
 }

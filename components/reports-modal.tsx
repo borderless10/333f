@@ -26,6 +26,7 @@ import {
 } from '@/lib/services/reports';
 import { exportReportToPDF } from '@/lib/services/report-pdf';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 import { useNotification } from '@/hooks/use-notification';
 import { buscarContas, type ContaBancaria } from '@/lib/contas';
 import { formatCurrency } from '@/lib/utils/currency';
@@ -53,6 +54,7 @@ type ReportType = 'reconciliation' | 'cashflow' | null;
 
 export function ReportsModal({ visible, onClose }: ReportsModalProps) {
   const { userId } = useAuth();
+  const { selectedCompany } = useCompany();
   const { showSuccess, showError, showInfo } = useNotification();
   const insets = useSafeAreaInsets();
   const [selectedReport, setSelectedReport] = useState<ReportType>(null);
@@ -191,7 +193,10 @@ export function ReportsModal({ visible, onClose }: ReportsModalProps) {
 
     setExportingPdf(true);
     try {
-      const uri = await exportReportToPDF(data, selectedReport);
+      const empresaNome = selectedCompany?.nome_fantasia || selectedCompany?.razao_social;
+      const uri = await exportReportToPDF(data, selectedReport, {
+        empresaNome: empresaNome || undefined,
+      });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'application/pdf',

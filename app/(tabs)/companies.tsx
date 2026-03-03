@@ -767,7 +767,6 @@ export default function CompaniesScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-      <Toast config={toastConfig} topOffset={60} />
     </View>
   );
 }

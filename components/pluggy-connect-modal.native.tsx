@@ -6,6 +6,8 @@
 import { PluggyConnect } from 'react-native-pluggy-connect';
 import React from 'react';
 import { Modal, Platform, StyleSheet, View } from 'react-native';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from './NotificationToast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export interface PluggySuccessData {
@@ -75,6 +77,7 @@ export function PluggyConnectModal({
           </View>
         ) : null}
       </View>
+      <Toast config={toastConfig} topOffset={60} />
     </Modal>
   );
 }

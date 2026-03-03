@@ -17,6 +17,8 @@ import { PluggyConnectModal } from './pluggy-connect-modal';
 import { ThemedText } from './themed-text';
 import { Button } from './ui/button';
 import { IconSymbol } from './ui/icon-symbol';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from './NotificationToast';
 
 interface NewConnectionModalProps {
   visible: boolean;
@@ -139,6 +141,7 @@ export function NewConnectionModal({ visible, onClose, onSuccess }: NewConnectio
           </ScrollView>
         </View>
       </View>
+      <Toast config={toastConfig} topOffset={60} />
     </Modal>
     <PluggyConnectModal
       visible={showPluggyWidget}

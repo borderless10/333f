@@ -13,6 +13,8 @@ import { AnimatedBackground } from './animated-background';
 import { GlassContainer } from './glass-container';
 import { ThemedText } from './themed-text';
 import { IconSymbol } from './ui/icon-symbol';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from './NotificationToast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/hooks/use-notification';
 import {
@@ -240,6 +242,7 @@ export function IntegrationLogsModal({ visible, onClose, connectionId }: Integra
           )}
         </View>
       </View>
+      <Toast config={toastConfig} topOffset={60} />
     </Modal>
   );
 }

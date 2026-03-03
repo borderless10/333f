@@ -18,6 +18,8 @@ import { GlassContainer } from './glass-container';
 import { ThemedText } from './themed-text';
 import { IconSymbol } from './ui/icon-symbol';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from './NotificationToast';
 
 export function CompanySelector() {
   const insets = useSafeAreaInsets();
@@ -217,6 +219,7 @@ export function CompanySelector() {
             )}
           </Animated.View>
         </View>
+        <Toast config={toastConfig} topOffset={60} />
       </Modal>
     </>
   );

@@ -1,5 +1,6 @@
 import { AnimatedBackground } from '@/components/animated-background';
 import { GlassContainer } from '@/components/glass-container';
+import { LinkConnectionToAccountModal } from '@/components/link-connection-to-account-modal';
 import { toastConfig } from '@/components/NotificationToast';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { ThemedText } from '@/components/themed-text';
@@ -8,6 +9,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
 import { useNotification } from '@/hooks/use-notification';
+import { getUserConnections, type OpenFinanceConnection } from '@/lib/services/open-finance';
 import { useScreenAnimations } from '@/hooks/use-screen-animations';
 import { useScrollToTop } from '@/hooks/use-scroll-to-top';
 import { atualizarConta, buscarContas, criarConta, deletarConta, type ContaBancaria } from '@/lib/contas';
@@ -22,8 +24,11 @@ export default function AccountsScreen() {
   const { showSuccess, showError } = useNotification();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
   const [contas, setContas] = useState<ContaBancaria[]>([]);
+  const [connections, setConnections] = useState<OpenFinanceConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [linkModalVisible, setLinkModalVisible] = useState(false);
+  const [contaParaVincular, setContaParaVincular] = useState<ContaBancaria | null>(null);
   const [editingConta, setEditingConta] = useState<ContaBancaria | null>(null);
   const { animatedStyle: headerStyle } = useScreenAnimations(0);
   const [accountAnims, setAccountAnims] = useState<Animated.Value[]>([]);
@@ -64,15 +69,20 @@ export default function AccountsScreen() {
     try {
       console.log('💳 Contas: Carregando dados para userId:', userId);
       setLoading(true);
-      const dados = await buscarContas(userId);
+      const [dados, conns] = await Promise.all([
+        buscarContas(userId),
+        getUserConnections(userId),
+      ]);
       console.log('✅ Contas carregadas:', dados?.length || 0);
       setContas(dados || []);
+      setConnections(conns || []);
     } catch (error) {
       console.error('❌ Erro ao carregar contas:', error);
       setContas([]);
+      setConnections([]);
       showError('Não foi possível carregar as contas.');
     } finally {
-      setLoading(false); // ✅ CORRIGIDO
+      setLoading(false);
     }
   };
 
@@ -348,7 +358,25 @@ export default function AccountsScreen() {
                 <ThemedText style={styles.detailText}>
                   Código Conta Banco: {conta.codigo_conta_banco}
                 </ThemedText>
+                {connections.some((c) => c.conta_bancaria_id === conta.id) && (
+                  <View style={styles.linkedBadge}>
+                    <IconSymbol name="link.circle.fill" size={14} color="#00b09b" />
+                    <ThemedText style={styles.linkedBadgeText}>Open Finance vinculado</ThemedText>
+                  </View>
+                )}
               </View>
+              <TouchableOpacity
+                style={styles.linkButton}
+                onPress={() => {
+                  setContaParaVincular(conta);
+                  setLinkModalVisible(true);
+                }}
+                activeOpacity={0.7}>
+                <IconSymbol name="link.circle" size={16} color="#8B5CF6" />
+                <Text style={styles.linkButtonText}>
+                  {connections.some((c) => c.conta_bancaria_id === conta.id) ? 'Alterar vínculo' : 'Vincular Open Finance'}
+                </Text>
+              </TouchableOpacity>
             </GlassContainer>
             </Animated.View>
           ))}
@@ -513,7 +541,19 @@ export default function AccountsScreen() {
           </View>
         </View>
       </Modal>
-      <Toast config={toastConfig} topOffset={60} />
+
+      <LinkConnectionToAccountModal
+        visible={linkModalVisible}
+        account={contaParaVincular}
+        onClose={() => {
+          setLinkModalVisible(false);
+          setContaParaVincular(null);
+        }}
+        onSuccess={() => {
+          if (userId) carregarContas(userId);
+        }}
+      />
+
     </View>
   );
 }
@@ -596,6 +636,36 @@ const styles = StyleSheet.create({
   detailText: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.7)',
+  },
+  linkedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  linkedBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#00b09b',
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  linkButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8B5CF6',
   },
   addAccountCard: {
     padding: 24,

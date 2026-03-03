@@ -1,9 +1,9 @@
 import React from 'react';
-import { StyleSheet, View, ViewStyle, Platform } from 'react-native';
+import { StyleSheet, View, Platform, type StyleProp, type ViewStyle } from 'react-native';
 
 interface GlassContainerProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function GlassContainer({ children, style }: GlassContainerProps) {
