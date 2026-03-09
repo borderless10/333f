@@ -1,17 +1,16 @@
-import { AnimatedBackground } from '@/components/animated-background';
-import { GlassContainer } from '@/components/glass-container';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/ui/button';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { UserCompanyModal } from '@/components/user-company-modal';
-import { useAuth } from '@/contexts/AuthContext';
-import { usePermissions } from '@/contexts/PermissionsContext';
-import { useScrollToTop } from '@/hooks/use-scroll-to-top';
-import { useNotification } from '@/hooks/use-notification';
-import Toast from 'react-native-toast-message';
-import { toastConfig } from '@/components/NotificationToast';
+import { AnimatedBackground } from "@/components/animated-background";
+import { GlassContainer } from "@/components/glass-container";
+import { toastConfig } from "@/components/NotificationToast";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { ThemedText } from "@/components/themed-text";
+import { Button } from "@/components/ui/button";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { UserCompanyModal } from "@/components/user-company-modal";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
+import { useNotification } from "@/hooks/use-notification";
+import { useScrollToTop } from "@/hooks/use-scroll-to-top";
 import {
   atualizarPerfil,
   buscarUsuariosComPerfis,
@@ -22,10 +21,9 @@ import {
   getRoleDescription,
   getRoleName,
   type UserRole,
-  type UserWithProfile
-} from '@/lib/services/profiles';
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+  type UserWithProfile,
+} from "@/lib/services/profiles";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -36,10 +34,11 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
-type FilterRole = 'all' | 'admin' | 'analista' | 'viewer' | 'no_profile';
+type FilterRole = "all" | "admin" | "analista" | "viewer" | "no_profile";
 
 export default function UsersScreen() {
   const insets = useSafeAreaInsets();
@@ -51,23 +50,31 @@ export default function UsersScreen() {
   const [users, setUsers] = useState<UserWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<UserWithProfile | null>(null);
-  const [selectedRole, setSelectedRole] = useState<UserRole>('viewer');
-  const [filterRole, setFilterRole] = useState<FilterRole>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  
+  const [selectedUser, setSelectedUser] = useState<UserWithProfile | null>(
+    null,
+  );
+  const [selectedRole, setSelectedRole] = useState<UserRole>("viewer");
+  const [filterRole, setFilterRole] = useState<FilterRole>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Estados para modal de criar novo usuário
   const [newUserModalVisible, setNewUserModalVisible] = useState(false);
-  const [newUserName, setNewUserName] = useState('');
-  const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserPassword, setNewUserPassword] = useState('');
-  const [newUserRole, setNewUserRole] = useState<UserRole>('viewer');
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRole, setNewUserRole] = useState<UserRole>("viewer");
   const [creatingUser, setCreatingUser] = useState(false);
-  const [newUserModalError, setNewUserModalError] = useState('');
-  
+  const [newUserModalError, setNewUserModalError] = useState("");
+
   // Modal de empresas do usuário
   const [companyModalVisible, setCompanyModalVisible] = useState(false);
-  const [selectedUserForCompanies, setSelectedUserForCompanies] = useState<UserWithProfile | null>(null);
+  const [selectedUserForCompanies, setSelectedUserForCompanies] =
+    useState<UserWithProfile | null>(null);
+  // Modal de confirmação de exclusão
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserWithProfile | null>(
+    null,
+  );
 
   useEffect(() => {
     // Só carrega se o usuário estiver autenticado
@@ -81,38 +88,54 @@ export default function UsersScreen() {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      console.log('[UsersScreen] Iniciando carregamento de usuários...');
-      
+      console.log("[UsersScreen] Iniciando carregamento de usuários...");
+
       const resultado = await buscarUsuariosComPerfis();
-      console.log('[UsersScreen] Resultado da busca:', resultado);
+      console.log("[UsersScreen] Resultado da busca:", resultado);
 
       if (resultado.error) {
-        console.error('[UsersScreen] Erro ao buscar usuários:', resultado.error);
-        if (resultado.error.message?.includes('Acesso negado') || resultado.error.message?.includes('permission denied')) {
-          showWarning('Apenas administradores podem acessar esta página.');
+        console.error(
+          "[UsersScreen] Erro ao buscar usuários:",
+          resultado.error,
+        );
+        if (
+          resultado.error.message?.includes("Acesso negado") ||
+          resultado.error.message?.includes("permission denied")
+        ) {
+          showWarning("Apenas administradores podem acessar esta página.");
         } else {
           // Mostra erro para outros tipos de erro
-          console.warn('[UsersScreen] Erro ao carregar usuários:', resultado.error.message);
-          showError('Não foi possível carregar os usuários', { iconType: 'user' });
+          console.warn(
+            "[UsersScreen] Erro ao carregar usuários:",
+            resultado.error.message,
+          );
+          showError("Não foi possível carregar os usuários", {
+            iconType: "user",
+          });
         }
         setUsers([]); // Limpa a lista em caso de erro
         return;
       }
 
       if (resultado.data) {
-        console.log('[UsersScreen] Usuários carregados:', resultado.data.length);
+        console.log(
+          "[UsersScreen] Usuários carregados:",
+          resultado.data.length,
+        );
         setUsers(resultado.data);
       } else {
-        console.log('[UsersScreen] Nenhum usuário encontrado');
+        console.log("[UsersScreen] Nenhum usuário encontrado");
         setUsers([]); // Garante que a lista está vazia se não houver dados
       }
     } catch (error: any) {
-      console.error('[UsersScreen] Exceção ao carregar usuários:', error);
+      console.error("[UsersScreen] Exceção ao carregar usuários:", error);
       setUsers([]); // Limpa a lista em caso de erro
-      showError(error?.message || 'Erro ao carregar usuários', { iconType: 'user' });
+      showError(error?.message || "Erro ao carregar usuários", {
+        iconType: "user",
+      });
     } finally {
       // SEMPRE desliga o loading, mesmo em caso de erro
-      console.log('[UsersScreen] Desligando loading...');
+      console.log("[UsersScreen] Desligando loading...");
       setLoading(false);
     }
   };
@@ -120,12 +143,12 @@ export default function UsersScreen() {
   const openModalChangeRole = (user: UserWithProfile) => {
     // Não pode alterar o próprio perfil
     if (user.id === userId) {
-      showWarning('Você não pode alterar seu próprio perfil.');
+      showWarning("Você não pode alterar seu próprio perfil.");
       return;
     }
 
     setSelectedUser(user);
-    setSelectedRole(user.role || 'viewer');
+    setSelectedRole(user.role || "viewer");
     setModalVisible(true);
   };
 
@@ -143,86 +166,84 @@ export default function UsersScreen() {
         await atualizarPerfil(selectedUser.id, selectedRole);
         closeModal();
         await loadUsers();
-        showSuccess('Perfil atualizado com sucesso!', { iconType: 'user', userRole: selectedRole });
+        showSuccess("Perfil atualizado com sucesso!", {
+          iconType: "user",
+          userRole: selectedRole,
+        });
       } else {
         // Criar novo perfil
         await criarPerfil(selectedUser.id, selectedRole);
         closeModal();
         await loadUsers();
-        showSuccess('Perfil criado com sucesso!', { iconType: 'user', userRole: selectedRole });
+        showSuccess("Perfil criado com sucesso!", {
+          iconType: "user",
+          userRole: selectedRole,
+        });
       }
-      
+
       // Se alterou o perfil do próprio usuário, recarrega
       if (selectedUser.id === userId) {
         await refreshUserRole();
       }
     } catch (error: any) {
-      console.error('Erro ao salvar perfil:', error);
-      showError(error.message || 'Não foi possível salvar o perfil');
+      console.error("Erro ao salvar perfil:", error);
+      showError(error.message || "Não foi possível salvar o perfil");
     }
   };
 
   const handleRemoveProfile = (user: UserWithProfile) => {
     if (user.id === userId) {
-      showWarning('Você não pode deletar sua própria conta.');
+      showWarning("Você não pode deletar sua própria conta.");
       return;
     }
 
-    Alert.alert(
-      'Confirmar exclusão permanente',
-      `⚠️ ATENÇÃO: Esta ação não pode ser desfeita!\n\n` +
-      `Deseja realmente deletar permanentemente o usuário "${user.email}"?\n\n` +
-      `O usuário será removido completamente do sistema, incluindo:\n` +
-      `• Perfil\n` +
-      `• Conta de autenticação\n` +
-      `• Todos os dados associados`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Deletar Permanentemente',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deletarUsuarioPermanentemente(user.id);
-              await loadUsers();
-              showSuccess('Usuário deletado permanentemente do sistema!', { iconType: 'user' });
-            } catch (error: any) {
-              console.error('Erro ao deletar usuário:', error);
-              
-              // Se o erro menciona que precisa deletar manualmente, mostra mensagem específica
-              if (error.message?.includes('Execute o SQL')) {
-                Alert.alert(
-                  'Perfil Removido',
-                  'O perfil foi removido, mas o usuário ainda existe no sistema.\n\n' +
-                  'Para deletar completamente, execute este SQL no Supabase:\n\n' +
-                  `DELETE FROM auth.users WHERE id = '${user.id}';`
-                );
-                await loadUsers();
-              } else {
-                showError(error.message || 'Não foi possível deletar o usuário');
-              }
-            }
-          },
-        },
-      ]
-    );
+    setUserToDelete(user);
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    try {
+      setDeleteModalVisible(false);
+      await deletarUsuarioPermanentemente(userToDelete.id);
+      await loadUsers();
+      showSuccess("Usuário deletado permanentemente do sistema!", {
+        iconType: "user",
+      });
+    } catch (error: any) {
+      console.error("Erro ao deletar usuário:", error);
+      if (error.message?.includes("Execute o SQL")) {
+        Alert.alert(
+          "Perfil Removido",
+          "O perfil foi removido, mas o usuário ainda existe no sistema.\n\n" +
+            "Para deletar completamente, execute este SQL no Supabase:\n\n" +
+            `DELETE FROM auth.users WHERE id = '${userToDelete.id}';`,
+        );
+        await loadUsers();
+      } else {
+        showError(error.message || "Não foi possível deletar o usuário");
+      }
+    } finally {
+      setUserToDelete(null);
+      setDeleteModalVisible(false);
+    }
   };
 
   const openNewUserModal = () => {
-    setNewUserName('');
-    setNewUserEmail('');
-    setNewUserPassword('');
-    setNewUserRole('viewer');
+    setNewUserName("");
+    setNewUserEmail("");
+    setNewUserPassword("");
+    setNewUserRole("viewer");
     setNewUserModalVisible(true);
   };
 
   const closeNewUserModal = () => {
     setNewUserModalVisible(false);
-    setNewUserName('');
-    setNewUserEmail('');
-    setNewUserPassword('');
-    setNewUserRole('viewer');
-    setNewUserModalError('');
+    setNewUserName("");
+    setNewUserEmail("");
+    setNewUserPassword("");
+    setNewUserRole("viewer");
+    setNewUserModalError("");
   };
 
   const validarEmail = (email: string): boolean => {
@@ -231,66 +252,66 @@ export default function UsersScreen() {
   };
 
   const handleCreateUser = async () => {
-    setNewUserModalError(''); // Limpar erro anterior
-    
+    setNewUserModalError(""); // Limpar erro anterior
+
     // Validações
     if (!newUserEmail.trim()) {
-      setNewUserModalError('Por favor, informe o email do usuário.');
+      setNewUserModalError("Por favor, informe o email do usuário.");
       return;
     }
 
     if (!validarEmail(newUserEmail.trim())) {
-      setNewUserModalError('Por favor, insira um email válido.');
+      setNewUserModalError("Por favor, insira um email válido.");
       return;
     }
 
     if (!newUserPassword || newUserPassword.length < 6) {
-      setNewUserModalError('A senha deve ter pelo menos 6 caracteres.');
+      setNewUserModalError("A senha deve ter pelo menos 6 caracteres.");
       return;
     }
 
     setCreatingUser(true);
 
     try {
-      console.log('[UsersScreen] Criando usuário com role:', newUserRole);
-      console.log('[UsersScreen] Email:', newUserEmail.trim());
-      console.log('[UsersScreen] Nome:', newUserName.trim() || undefined);
-      
+      console.log("[UsersScreen] Criando usuário com role:", newUserRole);
+      console.log("[UsersScreen] Email:", newUserEmail.trim());
+      console.log("[UsersScreen] Nome:", newUserName.trim() || undefined);
+
       const resultado = await criarNovoUsuario(
         newUserEmail.trim(),
         newUserPassword,
         newUserRole,
-        newUserName.trim() || undefined
+        newUserName.trim() || undefined,
       );
-      
-      console.log('[UsersScreen] Resultado da criação:', resultado);
+
+      console.log("[UsersScreen] Resultado da criação:", resultado);
 
       // Fecha o modal primeiro
       closeNewUserModal();
-      
+
       // Garante que o loading seja desligado imediatamente
       setCreatingUser(false);
 
       // Recarrega a lista de usuários
       await loadUsers();
-      
+
       // Mostra mensagem de sucesso com cor baseada no cargo
       showSuccess(`Usuário ${newUserEmail.trim()} criado com sucesso!`, {
-        iconType: 'user',
-        userRole: newUserRole
+        iconType: "user",
+        userRole: newUserRole,
       });
     } catch (error: any) {
-      console.error('Erro ao criar usuário:', error);
+      console.error("Erro ao criar usuário:", error);
       // Garante que o loading seja desligado mesmo em caso de erro
       setCreatingUser(false);
-      
+
       // Recarrega a lista para garantir que está atualizada
       await loadUsers();
-      
-      const errorMsg = error.message || 'Não foi possível criar o usuário';
+
+      const errorMsg = error.message || "Não foi possível criar o usuário";
       // Mostra erro dentro do modal e como toast
       setNewUserModalError(errorMsg);
-      showError(errorMsg, { iconType: 'user' });
+      showError(errorMsg, { iconType: "user" });
     }
   };
 
@@ -298,13 +319,13 @@ export default function UsersScreen() {
   const filteredUsers = users.filter((user) => {
     // Filtro por role
     const matchesRole =
-      filterRole === 'all' ||
-      (filterRole === 'no_profile' && !user.has_profile) ||
-      (filterRole !== 'no_profile' && user.role === filterRole);
+      filterRole === "all" ||
+      (filterRole === "no_profile" && !user.has_profile) ||
+      (filterRole !== "no_profile" && user.role === filterRole);
 
     // Filtro por busca
     const matchesSearch =
-      searchQuery.trim() === '' ||
+      searchQuery.trim() === "" ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase());
 
     return matchesRole && matchesSearch;
@@ -315,21 +336,29 @@ export default function UsersScreen() {
       <View style={styles.container}>
         <AnimatedBackground />
         {loading ? (
-          <View style={[styles.loadingContainer, { paddingTop: insets.top + 16 }]}>
+          <View
+            style={[styles.loadingContainer, { paddingTop: insets.top + 16 }]}
+          >
             <ActivityIndicator size="large" color="#00b09b" />
-            <ThemedText style={styles.loadingText}>Carregando usuários...</ThemedText>
+            <ThemedText style={styles.loadingText}>
+              Carregando usuários...
+            </ThemedText>
           </View>
         ) : (
           <ScrollView
             ref={scrollRef}
             style={styles.scrollView}
-            contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
-            showsVerticalScrollIndicator={false}>
+            contentContainerStyle={[
+              styles.content,
+              { paddingTop: insets.top + 16 },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
             <ScreenHeader
               title="Gerenciar Usuários"
-              subtitle={`${users.length} usuário${users.length !== 1 ? 's' : ''} cadastrado${users.length !== 1 ? 's' : ''}`}
+              subtitle={`${users.length} usuário${users.length !== 1 ? "s" : ""} cadastrado${users.length !== 1 ? "s" : ""}`}
               rightAction={{
-                icon: 'add',
+                icon: "add",
                 onPress: openNewUserModal,
                 visible: isAdmin,
               }}
@@ -339,7 +368,11 @@ export default function UsersScreen() {
             {/* Search Bar */}
             <GlassContainer style={styles.searchContainer}>
               <View style={styles.searchInputWrapper}>
-                <IconSymbol name="magnifyingglass" size={20} color="rgba(255, 255, 255, 0.6)" />
+                <IconSymbol
+                  name="magnifyingglass"
+                  size={20}
+                  color="rgba(255, 255, 255, 0.6)"
+                />
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Buscar por email..."
@@ -351,10 +384,15 @@ export default function UsersScreen() {
                 />
                 {searchQuery.length > 0 && (
                   <TouchableOpacity
-                    onPress={() => setSearchQuery('')}
+                    onPress={() => setSearchQuery("")}
                     style={styles.clearButton}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <IconSymbol name="xmark.circle.fill" size={20} color="rgba(255, 255, 255, 0.6)" />
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <IconSymbol
+                      name="xmark.circle.fill"
+                      size={20}
+                      color="rgba(255, 255, 255, 0.6)"
+                    />
                   </TouchableOpacity>
                 )}
               </View>
@@ -365,64 +403,100 @@ export default function UsersScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.filtersScroll}
-              contentContainerStyle={styles.filters}>
+              contentContainerStyle={styles.filters}
+            >
               <TouchableOpacity
-                style={[styles.filterButton, filterRole === 'all' && styles.filterButtonActive]}
-                onPress={() => setFilterRole('all')}
-                activeOpacity={0.7}>
+                style={[
+                  styles.filterButton,
+                  filterRole === "all" && styles.filterButtonActive,
+                ]}
+                onPress={() => setFilterRole("all")}
+                activeOpacity={0.7}
+              >
                 <Text
                   style={[
                     styles.filterText,
-                    filterRole === 'all' ? styles.filterTextActive : styles.filterTextInactive,
-                  ]}>
+                    filterRole === "all"
+                      ? styles.filterTextActive
+                      : styles.filterTextInactive,
+                  ]}
+                >
                   Todos
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.filterButton, filterRole === 'admin' && styles.filterButtonActive]}
-                onPress={() => setFilterRole('admin')}
-                activeOpacity={0.7}>
+                style={[
+                  styles.filterButton,
+                  filterRole === "admin" && styles.filterButtonActive,
+                ]}
+                onPress={() => setFilterRole("admin")}
+                activeOpacity={0.7}
+              >
                 <Text
                   style={[
                     styles.filterText,
-                    filterRole === 'admin' ? styles.filterTextActive : styles.filterTextInactive,
-                  ]}>
+                    filterRole === "admin"
+                      ? styles.filterTextActive
+                      : styles.filterTextInactive,
+                  ]}
+                >
                   Admin
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.filterButton, filterRole === 'analista' && styles.filterButtonActive]}
-                onPress={() => setFilterRole('analista')}
-                activeOpacity={0.7}>
+                style={[
+                  styles.filterButton,
+                  filterRole === "analista" && styles.filterButtonActive,
+                ]}
+                onPress={() => setFilterRole("analista")}
+                activeOpacity={0.7}
+              >
                 <Text
                   style={[
                     styles.filterText,
-                    filterRole === 'analista' ? styles.filterTextActive : styles.filterTextInactive,
-                  ]}>
+                    filterRole === "analista"
+                      ? styles.filterTextActive
+                      : styles.filterTextInactive,
+                  ]}
+                >
                   Analista
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.filterButton, filterRole === 'viewer' && styles.filterButtonActive]}
-                onPress={() => setFilterRole('viewer')}
-                activeOpacity={0.7}>
+                style={[
+                  styles.filterButton,
+                  filterRole === "viewer" && styles.filterButtonActive,
+                ]}
+                onPress={() => setFilterRole("viewer")}
+                activeOpacity={0.7}
+              >
                 <Text
                   style={[
                     styles.filterText,
-                    filterRole === 'viewer' ? styles.filterTextActive : styles.filterTextInactive,
-                  ]}>
+                    filterRole === "viewer"
+                      ? styles.filterTextActive
+                      : styles.filterTextInactive,
+                  ]}
+                >
                   Viewer
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.filterButton, filterRole === 'no_profile' && styles.filterButtonActive]}
-                onPress={() => setFilterRole('no_profile')}
-                activeOpacity={0.7}>
+                style={[
+                  styles.filterButton,
+                  filterRole === "no_profile" && styles.filterButtonActive,
+                ]}
+                onPress={() => setFilterRole("no_profile")}
+                activeOpacity={0.7}
+              >
                 <Text
                   style={[
                     styles.filterText,
-                    filterRole === 'no_profile' ? styles.filterTextActive : styles.filterTextInactive,
-                  ]}>
+                    filterRole === "no_profile"
+                      ? styles.filterTextActive
+                      : styles.filterTextInactive,
+                  ]}
+                >
                   Sem Perfil
                 </Text>
               </TouchableOpacity>
@@ -431,10 +505,18 @@ export default function UsersScreen() {
             {/* Users List */}
             {filteredUsers.length === 0 ? (
               <GlassContainer style={styles.emptyState}>
-                <IconSymbol name="person.2" size={48} color="rgba(255, 255, 255, 0.5)" />
-                <ThemedText style={styles.emptyStateText}>Nenhum usuário encontrado</ThemedText>
+                <IconSymbol
+                  name="person.2"
+                  size={48}
+                  color="rgba(255, 255, 255, 0.5)"
+                />
+                <ThemedText style={styles.emptyStateText}>
+                  Nenhum usuário encontrado
+                </ThemedText>
                 <ThemedText style={styles.emptyStateSubtext}>
-                  {searchQuery ? 'Tente buscar com outros termos' : 'Não há usuários cadastrados'}
+                  {searchQuery
+                    ? "Tente buscar com outros termos"
+                    : "Não há usuários cadastrados"}
                 </ThemedText>
               </GlassContainer>
             ) : (
@@ -446,11 +528,18 @@ export default function UsersScreen() {
                     <GlassContainer key={user.id} style={styles.userCard}>
                       <View style={styles.userHeader}>
                         <View style={styles.userIcon}>
-                          <IconSymbol name="person.crop.circle.fill" size={32} color="#00b09b" />
+                          <IconSymbol
+                            name="person.crop.circle.fill"
+                            size={32}
+                            color="#00b09b"
+                          />
                         </View>
                         <View style={styles.userInfo}>
                           <View style={styles.userNameRow}>
-                            <ThemedText type="defaultSemiBold" style={styles.userName}>
+                            <ThemedText
+                              type="defaultSemiBold"
+                              style={styles.userName}
+                            >
                               {user.email}
                             </ThemedText>
                             {isCurrentUser && (
@@ -460,7 +549,10 @@ export default function UsersScreen() {
                             )}
                           </View>
                           <ThemedText style={styles.userDate}>
-                            Cadastrado em: {new Date(user.created_at).toLocaleDateString('pt-BR')}
+                            Cadastrado em:{" "}
+                            {new Date(user.created_at).toLocaleDateString(
+                              "pt-BR",
+                            )}
                           </ThemedText>
                         </View>
                       </View>
@@ -469,10 +561,20 @@ export default function UsersScreen() {
                         <View
                           style={[
                             styles.roleBadge,
-                            { backgroundColor: `${getRoleColor(user.role || null)}20` },
-                          ]}>
-                          <Text style={[styles.roleText, { color: getRoleColor(user.role || null) }]}>
-                            {user.has_profile ? getRoleName(user.role!) : 'Sem Perfil'}
+                            {
+                              backgroundColor: `${getRoleColor(user.role || null)}20`,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.roleText,
+                              { color: getRoleColor(user.role || null) },
+                            ]}
+                          >
+                            {user.has_profile
+                              ? getRoleName(user.role!)
+                              : "Sem Perfil"}
                           </Text>
                         </View>
                       </View>
@@ -483,10 +585,17 @@ export default function UsersScreen() {
                             <TouchableOpacity
                               onPress={() => openModalChangeRole(user)}
                               style={styles.actionButton}
-                              activeOpacity={0.7}>
-                              <IconSymbol name="pencil" size={16} color="#00b09b" />
+                              activeOpacity={0.7}
+                            >
+                              <IconSymbol
+                                name="pencil"
+                                size={16}
+                                color="#00b09b"
+                              />
                               <Text style={styles.actionButtonText}>
-                                {user.has_profile ? 'Alterar Perfil' : 'Atribuir Perfil'}
+                                {user.has_profile
+                                  ? "Alterar Perfil"
+                                  : "Atribuir Perfil"}
                               </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
@@ -494,20 +603,43 @@ export default function UsersScreen() {
                                 setSelectedUserForCompanies(user);
                                 setCompanyModalVisible(true);
                               }}
-                              style={[styles.actionButton, styles.actionButtonPurple]}
-                              activeOpacity={0.7}>
-                              <IconSymbol name="building.2.fill" size={16} color="#8B5CF6" />
-                              <Text style={[styles.actionButtonText, { color: '#8B5CF6' }]}>
+                              style={[
+                                styles.actionButton,
+                                styles.actionButtonPurple,
+                              ]}
+                              activeOpacity={0.7}
+                            >
+                              <IconSymbol
+                                name="building.2.fill"
+                                size={16}
+                                color="#8B5CF6"
+                              />
+                              <Text
+                                style={[
+                                  styles.actionButtonText,
+                                  { color: "#8B5CF6" },
+                                ]}
+                              >
                                 Empresas
                               </Text>
                             </TouchableOpacity>
                           </View>
                           <TouchableOpacity
                             onPress={() => handleRemoveProfile(user)}
-                            style={[styles.actionButtonFull, styles.actionButtonDanger]}
-                            activeOpacity={0.7}>
-                            <IconSymbol name="trash" size={16} color="#EF4444" />
-                            <Text style={styles.actionButtonTextDanger}>Deletar Usuário</Text>
+                            style={[
+                              styles.actionButtonFull,
+                              styles.actionButtonDanger,
+                            ]}
+                            activeOpacity={0.7}
+                          >
+                            <IconSymbol
+                              name="trash"
+                              size={16}
+                              color="#EF4444"
+                            />
+                            <Text style={styles.actionButtonTextDanger}>
+                              Deletar Usuário
+                            </Text>
                           </TouchableOpacity>
                         </View>
                       )}
@@ -524,62 +656,96 @@ export default function UsersScreen() {
           visible={modalVisible}
           animationType="slide"
           transparent={true}
-          onRequestClose={closeModal}>
+          onRequestClose={closeModal}
+        >
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
+            <View
+              style={[styles.modalContent, { paddingTop: insets.top + 20 }]}
+            >
               <AnimatedBackground />
               <ScrollView
                 style={styles.modalScrollView}
                 contentContainerStyle={styles.modalScrollContent}
-                showsVerticalScrollIndicator={false}>
+                showsVerticalScrollIndicator={false}
+              >
                 <View style={styles.modalHeader}>
                   <ThemedText type="title" style={styles.modalTitle}>
-                    {selectedUser?.has_profile ? 'Alterar Perfil' : 'Atribuir Perfil'}
+                    {selectedUser?.has_profile
+                      ? "Alterar Perfil"
+                      : "Atribuir Perfil"}
                   </ThemedText>
-                  <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-                    <IconSymbol name="xmark.circle.fill" size={28} color="#FFFFFF" />
+                  <TouchableOpacity
+                    onPress={closeModal}
+                    style={styles.closeButton}
+                  >
+                    <IconSymbol
+                      name="xmark.circle.fill"
+                      size={28}
+                      color="#FFFFFF"
+                    />
                   </TouchableOpacity>
                 </View>
 
                 <View style={styles.formContainer}>
                   <View style={styles.userEmailCard}>
-                    <ThemedText style={styles.userEmailLabel}>Usuário:</ThemedText>
-                    <ThemedText type="defaultSemiBold" style={styles.userEmailValue}>
+                    <ThemedText style={styles.userEmailLabel}>
+                      Usuário:
+                    </ThemedText>
+                    <ThemedText
+                      type="defaultSemiBold"
+                      style={styles.userEmailValue}
+                    >
                       {selectedUser?.email}
                     </ThemedText>
                   </View>
 
-                  <ThemedText style={styles.sectionTitle}>Selecione o Perfil:</ThemedText>
+                  <ThemedText style={styles.sectionTitle}>
+                    Selecione o Perfil:
+                  </ThemedText>
 
                   {/* Admin */}
                   <TouchableOpacity
-                    style={[styles.roleOption, selectedRole === 'admin' && styles.roleOptionActive]}
-                    onPress={() => setSelectedRole('admin')}
-                    activeOpacity={0.7}>
+                    style={[
+                      styles.roleOption,
+                      selectedRole === "admin" && styles.roleOptionActive,
+                    ]}
+                    onPress={() => setSelectedRole("admin")}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.roleOptionHeader}>
                       <View
                         style={[
                           styles.roleOptionIcon,
-                          selectedRole === 'admin' && styles.roleOptionIconActive,
-                        ]}>
+                          selectedRole === "admin" &&
+                            styles.roleOptionIconActive,
+                        ]}
+                      >
                         <IconSymbol
                           name="checkmark"
                           size={20}
-                          color={selectedRole === 'admin' ? '#FFFFFF' : 'transparent'}
+                          color={
+                            selectedRole === "admin" ? "#FFFFFF" : "transparent"
+                          }
                         />
                       </View>
                       <View style={styles.roleOptionContent}>
                         <View
                           style={[
                             styles.roleOptionBadge,
-                            { backgroundColor: `${getRoleColor('admin')}20` },
-                          ]}>
-                          <Text style={[styles.roleOptionBadgeText, { color: getRoleColor('admin') }]}>
-                            {getRoleName('admin')}
+                            { backgroundColor: `${getRoleColor("admin")}20` },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.roleOptionBadgeText,
+                              { color: getRoleColor("admin") },
+                            ]}
+                          >
+                            {getRoleName("admin")}
                           </Text>
                         </View>
                         <ThemedText style={styles.roleOptionDescription}>
-                          {getRoleDescription('admin')}
+                          {getRoleDescription("admin")}
                         </ThemedText>
                       </View>
                     </View>
@@ -587,33 +753,51 @@ export default function UsersScreen() {
 
                   {/* Analista */}
                   <TouchableOpacity
-                    style={[styles.roleOption, selectedRole === 'analista' && styles.roleOptionActive]}
-                    onPress={() => setSelectedRole('analista')}
-                    activeOpacity={0.7}>
+                    style={[
+                      styles.roleOption,
+                      selectedRole === "analista" && styles.roleOptionActive,
+                    ]}
+                    onPress={() => setSelectedRole("analista")}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.roleOptionHeader}>
                       <View
                         style={[
                           styles.roleOptionIcon,
-                          selectedRole === 'analista' && styles.roleOptionIconActive,
-                        ]}>
+                          selectedRole === "analista" &&
+                            styles.roleOptionIconActive,
+                        ]}
+                      >
                         <IconSymbol
                           name="checkmark"
                           size={20}
-                          color={selectedRole === 'analista' ? '#FFFFFF' : 'transparent'}
+                          color={
+                            selectedRole === "analista"
+                              ? "#FFFFFF"
+                              : "transparent"
+                          }
                         />
                       </View>
                       <View style={styles.roleOptionContent}>
                         <View
                           style={[
                             styles.roleOptionBadge,
-                            { backgroundColor: `${getRoleColor('analista')}20` },
-                          ]}>
-                          <Text style={[styles.roleOptionBadgeText, { color: getRoleColor('analista') }]}>
-                            {getRoleName('analista')}
+                            {
+                              backgroundColor: `${getRoleColor("analista")}20`,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.roleOptionBadgeText,
+                              { color: getRoleColor("analista") },
+                            ]}
+                          >
+                            {getRoleName("analista")}
                           </Text>
                         </View>
                         <ThemedText style={styles.roleOptionDescription}>
-                          {getRoleDescription('analista')}
+                          {getRoleDescription("analista")}
                         </ThemedText>
                       </View>
                     </View>
@@ -621,33 +805,49 @@ export default function UsersScreen() {
 
                   {/* Viewer */}
                   <TouchableOpacity
-                    style={[styles.roleOption, selectedRole === 'viewer' && styles.roleOptionActive]}
-                    onPress={() => setSelectedRole('viewer')}
-                    activeOpacity={0.7}>
+                    style={[
+                      styles.roleOption,
+                      selectedRole === "viewer" && styles.roleOptionActive,
+                    ]}
+                    onPress={() => setSelectedRole("viewer")}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.roleOptionHeader}>
                       <View
                         style={[
                           styles.roleOptionIcon,
-                          selectedRole === 'viewer' && styles.roleOptionIconActive,
-                        ]}>
+                          selectedRole === "viewer" &&
+                            styles.roleOptionIconActive,
+                        ]}
+                      >
                         <IconSymbol
                           name="checkmark"
                           size={20}
-                          color={selectedRole === 'viewer' ? '#FFFFFF' : 'transparent'}
+                          color={
+                            selectedRole === "viewer"
+                              ? "#FFFFFF"
+                              : "transparent"
+                          }
                         />
                       </View>
                       <View style={styles.roleOptionContent}>
                         <View
                           style={[
                             styles.roleOptionBadge,
-                            { backgroundColor: `${getRoleColor('viewer')}20` },
-                          ]}>
-                          <Text style={[styles.roleOptionBadgeText, { color: getRoleColor('viewer') }]}>
-                            {getRoleName('viewer')}
+                            { backgroundColor: `${getRoleColor("viewer")}20` },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.roleOptionBadgeText,
+                              { color: getRoleColor("viewer") },
+                            ]}
+                          >
+                            {getRoleName("viewer")}
                           </Text>
                         </View>
                         <ThemedText style={styles.roleOptionDescription}>
-                          {getRoleDescription('viewer')}
+                          {getRoleDescription("viewer")}
                         </ThemedText>
                       </View>
                     </View>
@@ -678,27 +878,40 @@ export default function UsersScreen() {
           visible={newUserModalVisible}
           animationType="slide"
           transparent={true}
-          onRequestClose={closeNewUserModal}>
+          onRequestClose={closeNewUserModal}
+        >
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
+            <View
+              style={[styles.modalContent, { paddingTop: insets.top + 20 }]}
+            >
               <AnimatedBackground />
               <ScrollView
                 style={styles.modalScrollView}
                 contentContainerStyle={styles.modalScrollContent}
-                showsVerticalScrollIndicator={false}>
+                showsVerticalScrollIndicator={false}
+              >
                 <View style={styles.modalHeader}>
                   <ThemedText type="title" style={styles.modalTitle}>
                     Criar Novo Usuário
                   </ThemedText>
-                  <TouchableOpacity onPress={closeNewUserModal} style={styles.closeButton}>
-                    <IconSymbol name="xmark.circle.fill" size={28} color="#FFFFFF" />
+                  <TouchableOpacity
+                    onPress={closeNewUserModal}
+                    style={styles.closeButton}
+                  >
+                    <IconSymbol
+                      name="xmark.circle.fill"
+                      size={28}
+                      color="#FFFFFF"
+                    />
                   </TouchableOpacity>
                 </View>
 
                 <View style={styles.formContainer}>
                   {/* Nome (opcional) */}
                   <View style={styles.inputGroup}>
-                    <ThemedText style={styles.inputLabel}>Nome (opcional)</ThemedText>
+                    <ThemedText style={styles.inputLabel}>
+                      Nome (opcional)
+                    </ThemedText>
                     <GlassContainer style={styles.inputContainer}>
                       <TextInput
                         style={styles.input}
@@ -722,7 +935,7 @@ export default function UsersScreen() {
                         value={newUserEmail}
                         onChangeText={(text) => {
                           setNewUserEmail(text);
-                          setNewUserModalError('');
+                          setNewUserModalError("");
                         }}
                         keyboardType="email-address"
                         autoCapitalize="none"
@@ -733,7 +946,9 @@ export default function UsersScreen() {
 
                   {/* Senha */}
                   <View style={styles.inputGroup}>
-                    <ThemedText style={styles.inputLabel}>Senha Temporária *</ThemedText>
+                    <ThemedText style={styles.inputLabel}>
+                      Senha Temporária *
+                    </ThemedText>
                     <GlassContainer style={styles.inputContainer}>
                       <TextInput
                         style={styles.input}
@@ -742,7 +957,7 @@ export default function UsersScreen() {
                         value={newUserPassword}
                         onChangeText={(text) => {
                           setNewUserPassword(text);
-                          setNewUserModalError('');
+                          setNewUserModalError("");
                         }}
                         secureTextEntry
                         autoCapitalize="none"
@@ -756,37 +971,55 @@ export default function UsersScreen() {
 
                   {/* Perfil */}
                   <View style={styles.inputGroup}>
-                    <ThemedText style={styles.sectionTitle}>Selecione o Perfil:</ThemedText>
+                    <ThemedText style={styles.sectionTitle}>
+                      Selecione o Perfil:
+                    </ThemedText>
 
                     {/* Admin */}
                     <TouchableOpacity
-                      style={[styles.roleOption, newUserRole === 'admin' && styles.roleOptionActive]}
-                      onPress={() => setNewUserRole('admin')}
-                      activeOpacity={0.7}>
+                      style={[
+                        styles.roleOption,
+                        newUserRole === "admin" && styles.roleOptionActive,
+                      ]}
+                      onPress={() => setNewUserRole("admin")}
+                      activeOpacity={0.7}
+                    >
                       <View style={styles.roleOptionHeader}>
                         <View
                           style={[
                             styles.roleOptionIcon,
-                            newUserRole === 'admin' && styles.roleOptionIconActive,
-                          ]}>
+                            newUserRole === "admin" &&
+                              styles.roleOptionIconActive,
+                          ]}
+                        >
                           <IconSymbol
                             name="checkmark"
                             size={20}
-                            color={newUserRole === 'admin' ? '#FFFFFF' : 'transparent'}
+                            color={
+                              newUserRole === "admin"
+                                ? "#FFFFFF"
+                                : "transparent"
+                            }
                           />
                         </View>
                         <View style={styles.roleOptionContent}>
                           <View
                             style={[
                               styles.roleOptionBadge,
-                              { backgroundColor: `${getRoleColor('admin')}20` },
-                            ]}>
-                            <Text style={[styles.roleOptionBadgeText, { color: getRoleColor('admin') }]}>
-                              {getRoleName('admin')}
+                              { backgroundColor: `${getRoleColor("admin")}20` },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.roleOptionBadgeText,
+                                { color: getRoleColor("admin") },
+                              ]}
+                            >
+                              {getRoleName("admin")}
                             </Text>
                           </View>
                           <ThemedText style={styles.roleOptionDescription}>
-                            {getRoleDescription('admin')}
+                            {getRoleDescription("admin")}
                           </ThemedText>
                         </View>
                       </View>
@@ -794,33 +1027,51 @@ export default function UsersScreen() {
 
                     {/* Analista */}
                     <TouchableOpacity
-                      style={[styles.roleOption, newUserRole === 'analista' && styles.roleOptionActive]}
-                      onPress={() => setNewUserRole('analista')}
-                      activeOpacity={0.7}>
+                      style={[
+                        styles.roleOption,
+                        newUserRole === "analista" && styles.roleOptionActive,
+                      ]}
+                      onPress={() => setNewUserRole("analista")}
+                      activeOpacity={0.7}
+                    >
                       <View style={styles.roleOptionHeader}>
                         <View
                           style={[
                             styles.roleOptionIcon,
-                            newUserRole === 'analista' && styles.roleOptionIconActive,
-                          ]}>
+                            newUserRole === "analista" &&
+                              styles.roleOptionIconActive,
+                          ]}
+                        >
                           <IconSymbol
                             name="checkmark"
                             size={20}
-                            color={newUserRole === 'analista' ? '#FFFFFF' : 'transparent'}
+                            color={
+                              newUserRole === "analista"
+                                ? "#FFFFFF"
+                                : "transparent"
+                            }
                           />
                         </View>
                         <View style={styles.roleOptionContent}>
                           <View
                             style={[
                               styles.roleOptionBadge,
-                              { backgroundColor: `${getRoleColor('analista')}20` },
-                            ]}>
-                            <Text style={[styles.roleOptionBadgeText, { color: getRoleColor('analista') }]}>
-                              {getRoleName('analista')}
+                              {
+                                backgroundColor: `${getRoleColor("analista")}20`,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.roleOptionBadgeText,
+                                { color: getRoleColor("analista") },
+                              ]}
+                            >
+                              {getRoleName("analista")}
                             </Text>
                           </View>
                           <ThemedText style={styles.roleOptionDescription}>
-                            {getRoleDescription('analista')}
+                            {getRoleDescription("analista")}
                           </ThemedText>
                         </View>
                       </View>
@@ -828,33 +1079,51 @@ export default function UsersScreen() {
 
                     {/* Viewer */}
                     <TouchableOpacity
-                      style={[styles.roleOption, newUserRole === 'viewer' && styles.roleOptionActive]}
-                      onPress={() => setNewUserRole('viewer')}
-                      activeOpacity={0.7}>
+                      style={[
+                        styles.roleOption,
+                        newUserRole === "viewer" && styles.roleOptionActive,
+                      ]}
+                      onPress={() => setNewUserRole("viewer")}
+                      activeOpacity={0.7}
+                    >
                       <View style={styles.roleOptionHeader}>
                         <View
                           style={[
                             styles.roleOptionIcon,
-                            newUserRole === 'viewer' && styles.roleOptionIconActive,
-                          ]}>
+                            newUserRole === "viewer" &&
+                              styles.roleOptionIconActive,
+                          ]}
+                        >
                           <IconSymbol
                             name="checkmark"
                             size={20}
-                            color={newUserRole === 'viewer' ? '#FFFFFF' : 'transparent'}
+                            color={
+                              newUserRole === "viewer"
+                                ? "#FFFFFF"
+                                : "transparent"
+                            }
                           />
                         </View>
                         <View style={styles.roleOptionContent}>
                           <View
                             style={[
                               styles.roleOptionBadge,
-                              { backgroundColor: `${getRoleColor('viewer')}20` },
-                            ]}>
-                            <Text style={[styles.roleOptionBadgeText, { color: getRoleColor('viewer') }]}>
-                              {getRoleName('viewer')}
+                              {
+                                backgroundColor: `${getRoleColor("viewer")}20`,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.roleOptionBadgeText,
+                                { color: getRoleColor("viewer") },
+                              ]}
+                            >
+                              {getRoleName("viewer")}
                             </Text>
                           </View>
                           <ThemedText style={styles.roleOptionDescription}>
-                            {getRoleDescription('viewer')}
+                            {getRoleDescription("viewer")}
                           </ThemedText>
                         </View>
                       </View>
@@ -862,7 +1131,7 @@ export default function UsersScreen() {
                   </View>
 
                   {/* Error Message */}
-                  {newUserModalError !== '' && (
+                  {newUserModalError !== "" && (
                     <View style={styles.errorContainer}>
                       <Text style={styles.errorText}>{newUserModalError}</Text>
                     </View>
@@ -870,7 +1139,7 @@ export default function UsersScreen() {
 
                   <View style={styles.modalActions}>
                     <Button
-                      title={creatingUser ? 'Criando...' : 'Criar Usuário'}
+                      title={creatingUser ? "Criando..." : "Criar Usuário"}
                       onPress={handleCreateUser}
                       style={styles.saveButton}
                       disabled={creatingUser}
@@ -903,6 +1172,80 @@ export default function UsersScreen() {
             loadUsers();
           }}
         />
+        {/* Modal de confirmação de exclusão de usuário */}
+        <Modal
+          visible={deleteModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setDeleteModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { paddingTop: 80 }]}>
+              <AnimatedBackground />
+              <ScrollView
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.modalHeader}>
+                  <ThemedText type="title" style={styles.modalTitle}>
+                    Confirmar exclusão
+                  </ThemedText>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setDeleteModalVisible(false);
+                      setUserToDelete(null);
+                    }}
+                    style={styles.closeButton}
+                  >
+                    <IconSymbol
+                      name="xmark.circle.fill"
+                      size={28}
+                      color="#FFFFFF"
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.formContainer}>
+                  <View style={styles.userEmailCard}>
+                    <ThemedText style={styles.userEmailLabel}>
+                      Usuário
+                    </ThemedText>
+                    <ThemedText
+                      type="defaultSemiBold"
+                      style={styles.userEmailValue}
+                    >
+                      {userToDelete?.email}
+                    </ThemedText>
+                  </View>
+
+                  <ThemedText style={{ color: "rgba(255,255,255,0.85)" }}>
+                    ⚠️ ATENÇÃO: Esta ação é permanente e não pode ser desfeita.
+                    O usuário será removido completamente do sistema, incluindo
+                    perfil, conta de autenticação e dados associados.
+                  </ThemedText>
+
+                  <View style={styles.modalActions}>
+                    <Button
+                      title="Cancelar"
+                      variant="outline"
+                      onPress={() => {
+                        setDeleteModalVisible(false);
+                        setUserToDelete(null);
+                      }}
+                    />
+                    <Button
+                      title="Deletar Permanentemente"
+                      style={{ backgroundColor: "#EF4444" }}
+                      onPress={confirmDeleteUser}
+                    />
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+            <Toast config={toastConfig} topOffset={60} />
+          </View>
+        </Modal>
       </View>
     </ProtectedRoute>
   );
@@ -920,33 +1263,33 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   loadingText: {
     marginTop: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
   },
   header: {
     marginBottom: 24,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   headerTextContainer: {
     flex: 1,
   },
   title: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   subtitle: {
     fontSize: 14,
     marginTop: 4,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
   },
   addButton: {
     padding: 4,
@@ -957,14 +1300,14 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   searchInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     paddingVertical: 8,
   },
   clearButton: {
@@ -974,27 +1317,27 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   filters: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   filterButton: {
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   filterButtonActive: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   filterText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   filterTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   filterTextInactive: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   usersList: {
     gap: 16,
@@ -1004,45 +1347,45 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   userHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 12,
   },
   userIcon: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(0, 176, 155, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0, 176, 155, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   userInfo: {
     flex: 1,
   },
   userNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   userName: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
   },
   youBadge: {
-    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    backgroundColor: "rgba(59, 130, 246, 0.2)",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
   },
   youBadgeText: {
-    color: '#3B82F6',
+    color: "#3B82F6",
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   userDate: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: "rgba(255, 255, 255, 0.6)",
     fontSize: 13,
     marginTop: 4,
   },
@@ -1050,83 +1393,83 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   roleBadge: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
   roleText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   actionsColumn: {
     gap: 8,
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: "rgba(255, 255, 255, 0.1)",
   },
   actionsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   actionButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: 'rgba(0, 176, 155, 0.2)',
+    backgroundColor: "rgba(0, 176, 155, 0.2)",
   },
   actionButtonFull: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   actionButtonDanger: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
   },
   actionButtonPurple: {
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    backgroundColor: "rgba(139, 92, 246, 0.2)",
   },
   actionButtonText: {
-    color: '#00b09b',
+    color: "#00b09b",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   actionButtonTextDanger: {
-    color: '#EF4444',
+    color: "#EF4444",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   emptyState: {
     padding: 32,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 16,
   },
   emptyStateText: {
     marginTop: 16,
     fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   emptyStateSubtext: {
     marginTop: 8,
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
-    textAlign: 'center',
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
   modalContent: {
     flex: 1,
@@ -1139,13 +1482,13 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 24,
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 24,
   },
   closeButton: {
@@ -1155,41 +1498,41 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   userEmailCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 12,
     padding: 16,
     marginBottom: 8,
   },
   userEmailLabel: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
     marginBottom: 4,
   },
   userEmailValue: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
     marginBottom: 8,
   },
   roleOption: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
   },
   roleOptionActive: {
-    borderColor: '#00b09b',
-    backgroundColor: 'rgba(0, 176, 155, 0.1)',
+    borderColor: "#00b09b",
+    backgroundColor: "rgba(0, 176, 155, 0.1)",
   },
   roleOptionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 12,
   },
   roleOptionIcon: {
@@ -1197,19 +1540,19 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   roleOptionIconActive: {
-    borderColor: '#00b09b',
-    backgroundColor: '#00b09b',
+    borderColor: "#00b09b",
+    backgroundColor: "#00b09b",
   },
   roleOptionContent: {
     flex: 1,
   },
   roleOptionBadge: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -1217,11 +1560,11 @@ const styles = StyleSheet.create({
   },
   roleOptionBadgeText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   roleOptionDescription: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
     lineHeight: 20,
   },
   modalActions: {
@@ -1229,20 +1572,20 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   saveButton: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   cancelButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
   inputGroup: {
     marginBottom: 16,
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
     marginBottom: 8,
   },
   inputContainer: {
@@ -1250,29 +1593,29 @@ const styles = StyleSheet.create({
   },
   input: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     paddingVertical: 8,
   },
   inputHint: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: "rgba(255, 255, 255, 0.6)",
     marginTop: 4,
   },
   errorContainer: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.5)',
+    borderColor: "rgba(239, 68, 68, 0.5)",
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
   },
   errorText: {
-    color: '#EF4444',
+    color: "#EF4444",
     fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: "500",
+    textAlign: "center",
   },
   actionButtonPurple: {
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    backgroundColor: "rgba(139, 92, 246, 0.2)",
   },
 });

@@ -1,17 +1,17 @@
-import { AnimatedBackground } from '@/components/animated-background';
-import { GlassContainer } from '@/components/glass-container';
-import { toastConfig } from '@/components/NotificationToast';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/ui/button';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useAuth } from '@/contexts/AuthContext';
-import { useCompany } from '@/contexts/CompanyContext';
-import { usePermissions } from '@/contexts/PermissionsContext';
-import { useNotification } from '@/hooks/use-notification';
-import { useScreenAnimations } from '@/hooks/use-screen-animations';
-import { useScrollToTop } from '@/hooks/use-scroll-to-top';
-import { buscarContas, type ContaBancaria } from '@/lib/contas';
+import { AnimatedBackground } from "@/components/animated-background";
+import { GlassContainer } from "@/components/glass-container";
+import { toastConfig } from "@/components/NotificationToast";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { ThemedText } from "@/components/themed-text";
+import { Button } from "@/components/ui/button";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
+import { useNotification } from "@/hooks/use-notification";
+import { useScreenAnimations } from "@/hooks/use-screen-animations";
+import { useScrollToTop } from "@/hooks/use-scroll-to-top";
+import { buscarContas, type ContaBancaria } from "@/lib/contas";
 import {
   atualizarTitulo,
   buscarTitulos,
@@ -20,12 +20,15 @@ import {
   desmarcarTituloComoPago,
   marcarTituloComoPago,
   type TitleWithAccount,
-} from '@/lib/services/titles';
-import { formatCurrency, formatCurrencyInput, parseCurrencyBRL } from '@/lib/utils/currency';
-import React, { useEffect, useMemo, useState } from 'react';
+} from "@/lib/services/titles";
+import {
+  formatCurrency,
+  formatCurrencyInput,
+  parseCurrencyBRL,
+} from "@/lib/utils/currency";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Modal,
   ScrollView,
@@ -34,13 +37,19 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Toast from 'react-native-toast-message';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
-type FilterTipo = 'all' | 'pagar' | 'receber';
-type FilterStatus = 'all' | 'pendente' | 'pago' | 'vencido';
-type SortType = 'vencimento-desc' | 'vencimento-asc' | 'valor-desc' | 'valor-asc' | 'nome-asc' | 'nome-desc';
+type FilterTipo = "all" | "pagar" | "receber";
+type FilterStatus = "all" | "pendente" | "pago" | "vencido";
+type SortType =
+  | "vencimento-desc"
+  | "vencimento-asc"
+  | "valor-desc"
+  | "valor-asc"
+  | "nome-asc"
+  | "nome-desc";
 
 export default function TitlesScreen() {
   const insets = useSafeAreaInsets();
@@ -56,22 +65,34 @@ export default function TitlesScreen() {
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
-  const [editingTitle, setEditingTitle] = useState<TitleWithAccount | null>(null);
+  const [editingTitle, setEditingTitle] = useState<TitleWithAccount | null>(
+    null,
+  );
+  // Modal de confirmação de exclusão de título
+  const [deleteTitleModalVisible, setDeleteTitleModalVisible] = useState(false);
+  const [titleToDelete, setTitleToDelete] = useState<TitleWithAccount | null>(
+    null,
+  );
+  // Modal para desmarcar título como pago
+  const [unmarkTitleModalVisible, setUnmarkTitleModalVisible] = useState(false);
+  const [titleToUnmark, setTitleToUnmark] = useState<TitleWithAccount | null>(
+    null,
+  );
 
   // Filtros
-  const [filterTipo, setFilterTipo] = useState<FilterTipo>('all');
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
-  const [sortBy, setSortBy] = useState<SortType>('vencimento-desc');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filterTipo, setFilterTipo] = useState<FilterTipo>("all");
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  const [sortBy, setSortBy] = useState<SortType>("vencimento-desc");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Formulário
-  const [fornecedorCliente, setFornecedorCliente] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [valor, setValor] = useState('R$ 0,00');
-  const [dataVencimento, setDataVencimento] = useState('');
-  const [tipo, setTipo] = useState<'pagar' | 'receber'>('pagar');
+  const [fornecedorCliente, setFornecedorCliente] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [valor, setValor] = useState("R$ 0,00");
+  const [dataVencimento, setDataVencimento] = useState("");
+  const [tipo, setTipo] = useState<"pagar" | "receber">("pagar");
   const [contaBancariaId, setContaBancariaId] = useState<number | null>(null);
-  const [modalError, setModalError] = useState('');
+  const [modalError, setModalError] = useState("");
 
   useEffect(() => {
     loadData();
@@ -79,7 +100,7 @@ export default function TitlesScreen() {
 
   const loadData = async () => {
     if (!userId) {
-      console.log('📋 Títulos: Aguardando userId...');
+      console.log("📋 Títulos: Aguardando userId...");
       setLoading(false);
       setTitles([]);
       setContas([]);
@@ -87,7 +108,12 @@ export default function TitlesScreen() {
     }
 
     try {
-      console.log('📋 Títulos: Carregando dados para userId:', userId, 'empresaId:', selectedCompany?.id);
+      console.log(
+        "📋 Títulos: Carregando dados para userId:",
+        userId,
+        "empresaId:",
+        selectedCompany?.id,
+      );
       setLoading(true);
       const [titlesResult, contasResult] = await Promise.all([
         buscarTitulos(userId, selectedCompany?.id ?? null),
@@ -95,27 +121,31 @@ export default function TitlesScreen() {
       ]);
 
       if (titlesResult.error) {
-        console.error('❌ Erro ao buscar títulos:', titlesResult.error);
+        console.error("❌ Erro ao buscar títulos:", titlesResult.error);
         setTitles([]);
-        showError('Não foi possível carregar os títulos', { iconType: 'title' });
+        showError("Não foi possível carregar os títulos", {
+          iconType: "title",
+        });
       } else if (titlesResult.data) {
-        console.log('✅ Títulos carregados:', titlesResult.data.length);
+        console.log("✅ Títulos carregados:", titlesResult.data.length);
         setTitles(titlesResult.data);
       } else {
         setTitles([]);
       }
 
       if (contasResult) {
-        console.log('✅ Contas carregadas:', contasResult.length);
+        console.log("✅ Contas carregadas:", contasResult.length);
         setContas(contasResult);
       } else {
         setContas([]);
       }
     } catch (error: any) {
-      console.error('❌ Erro ao carregar dados:', error);
+      console.error("❌ Erro ao carregar dados:", error);
       setTitles([]);
       setContas([]);
-      showError(error?.message || 'Erro ao carregar dados', { iconType: 'title' });
+      showError(error?.message || "Erro ao carregar dados", {
+        iconType: "title",
+      });
     } finally {
       setLoading(false);
     }
@@ -123,7 +153,7 @@ export default function TitlesScreen() {
 
   const openModalAdd = () => {
     if (isViewerOnly) {
-      showWarning('Você não tem permissão para adicionar títulos.');
+      showWarning("Você não tem permissão para adicionar títulos.");
       return;
     }
 
@@ -134,21 +164,21 @@ export default function TitlesScreen() {
 
   // Função para converter data ISO (YYYY-MM-DD) para formato brasileiro (DD/MM/YYYY)
   const converterDataParaBrasileira = (dataISO: string): string => {
-    if (!dataISO) return '';
-    const partes = dataISO.split('-');
+    if (!dataISO) return "";
+    const partes = dataISO.split("-");
     if (partes.length !== 3) return dataISO;
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
   };
 
   const openModalEdit = (title: TitleWithAccount) => {
     if (!canEdit) {
-      showWarning('Você não tem permissão para editar títulos.');
+      showWarning("Você não tem permissão para editar títulos.");
       return;
     }
 
     setEditingTitle(title);
     setFornecedorCliente(title.fornecedor_cliente);
-    setDescricao(title.descricao || '');
+    setDescricao(title.descricao || "");
     setValor(formatCurrency(title.valor));
     // Converte data ISO para formato brasileiro ao editar
     setDataVencimento(converterDataParaBrasileira(title.data_vencimento));
@@ -160,28 +190,28 @@ export default function TitlesScreen() {
   const closeModal = () => {
     setModalVisible(false);
     setEditingTitle(null);
-    setModalError('');
+    setModalError("");
   };
 
   const resetForm = () => {
-    setFornecedorCliente('');
-    setDescricao('');
-    setValor('R$ 0,00');
-    setDataVencimento('');
-    setTipo('pagar');
+    setFornecedorCliente("");
+    setDescricao("");
+    setValor("R$ 0,00");
+    setDataVencimento("");
+    setTipo("pagar");
     setContaBancariaId(null);
   };
 
   // Função para formatar data brasileira (DD/MM/YYYY)
   const formatarDataBrasileira = (text: string): string => {
     // Remove tudo que não é dígito
-    let numbers = text.replace(/\D/g, '');
-    
+    let numbers = text.replace(/\D/g, "");
+
     // Limita a 8 dígitos (DDMMYYYY)
     if (numbers.length > 8) {
       numbers = numbers.slice(0, 8);
     }
-    
+
     // Adiciona barras automaticamente
     if (numbers.length <= 2) {
       return numbers;
@@ -194,28 +224,33 @@ export default function TitlesScreen() {
 
   // Função para converter data brasileira (DD/MM/YYYY) para formato ISO (YYYY-MM-DD)
   const converterDataParaISO = (dataBR: string): string | null => {
-    const partes = dataBR.split('/');
+    const partes = dataBR.split("/");
     if (partes.length !== 3) return null;
-    
+
     const dia = parseInt(partes[0], 10);
     const mes = parseInt(partes[1], 10);
     const ano = parseInt(partes[2], 10);
-    
+
     if (isNaN(dia) || isNaN(mes) || isNaN(ano)) return null;
-    
+
     // Formata como YYYY-MM-DD
-    return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+    return `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
   };
 
   // Função para validar data brasileira
-  const validarDataBrasileira = (dataBR: string): { valido: boolean; mensagem?: string } => {
-    if (!dataBR || dataBR.trim() === '') {
-      return { valido: false, mensagem: 'Data de vencimento é obrigatória' };
+  const validarDataBrasileira = (
+    dataBR: string,
+  ): { valido: boolean; mensagem?: string } => {
+    if (!dataBR || dataBR.trim() === "") {
+      return { valido: false, mensagem: "Data de vencimento é obrigatória" };
     }
 
-    const partes = dataBR.split('/');
+    const partes = dataBR.split("/");
     if (partes.length !== 3) {
-      return { valido: false, mensagem: 'Data inválida. Use o formato DD/MM/YYYY' };
+      return {
+        valido: false,
+        mensagem: "Data inválida. Use o formato DD/MM/YYYY",
+      };
     }
 
     const dia = parseInt(partes[0], 10);
@@ -223,59 +258,75 @@ export default function TitlesScreen() {
     const ano = parseInt(partes[2], 10);
 
     if (isNaN(dia) || isNaN(mes) || isNaN(ano)) {
-      return { valido: false, mensagem: 'Data inválida. Use apenas números' };
+      return { valido: false, mensagem: "Data inválida. Use apenas números" };
     }
 
     // Valida mês
     if (mes < 1 || mes > 12) {
-      return { valido: false, mensagem: 'Mês inválido. O mês deve estar entre 01 e 12' };
+      return {
+        valido: false,
+        mensagem: "Mês inválido. O mês deve estar entre 01 e 12",
+      };
     }
 
     // Valida dia
     const diasNoMes = new Date(ano, mes, 0).getDate();
     if (dia < 1 || dia > diasNoMes) {
-      return { valido: false, mensagem: `Dia inválido. Este mês tem apenas ${diasNoMes} dias` };
+      return {
+        valido: false,
+        mensagem: `Dia inválido. Este mês tem apenas ${diasNoMes} dias`,
+      };
     }
 
     // Valida ano (deve ser entre 1900 e 2100)
     if (ano < 1900 || ano > 2100) {
-      return { valido: false, mensagem: 'Ano inválido. Use um ano entre 1900 e 2100' };
+      return {
+        valido: false,
+        mensagem: "Ano inválido. Use um ano entre 1900 e 2100",
+      };
     }
 
     // Cria objeto Date para validar se a data é válida
     const data = new Date(ano, mes - 1, dia);
-    if (data.getFullYear() !== ano || data.getMonth() !== mes - 1 || data.getDate() !== dia) {
-      return { valido: false, mensagem: 'Data inválida' };
+    if (
+      data.getFullYear() !== ano ||
+      data.getMonth() !== mes - 1 ||
+      data.getDate() !== dia
+    ) {
+      return { valido: false, mensagem: "Data inválida" };
     }
 
     // Verifica se a data já passou
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0); // Remove horas para comparar apenas datas
     if (data < hoje) {
-      return { valido: false, mensagem: 'A data de vencimento não pode ser no passado' };
+      return {
+        valido: false,
+        mensagem: "A data de vencimento não pode ser no passado",
+      };
     }
 
     return { valido: true };
   };
 
   const validateForm = (): boolean => {
-    setModalError(''); // Limpar erro anterior
-    
+    setModalError(""); // Limpar erro anterior
+
     if (!fornecedorCliente.trim()) {
-      setModalError('Fornecedor/Cliente é obrigatório');
+      setModalError("Fornecedor/Cliente é obrigatório");
       return false;
     }
 
     const valorNumerico = parseCurrencyBRL(valor);
     if (valorNumerico <= 0) {
-      setModalError('Valor deve ser maior que zero');
+      setModalError("Valor deve ser maior que zero");
       return false;
     }
 
     // Valida data brasileira
     const validacaoData = validarDataBrasileira(dataVencimento);
     if (!validacaoData.valido) {
-      setModalError(validacaoData.mensagem || 'Data de vencimento inválida');
+      setModalError(validacaoData.mensagem || "Data de vencimento inválida");
       return false;
     }
 
@@ -289,7 +340,7 @@ export default function TitlesScreen() {
       // Converte data brasileira (DD/MM/YYYY) para formato ISO (YYYY-MM-DD)
       const dataISO = converterDataParaISO(dataVencimento);
       if (!dataISO) {
-        setModalError('Erro ao converter data. Verifique o formato.');
+        setModalError("Erro ao converter data. Verifique o formato.");
         return;
       }
 
@@ -306,36 +357,44 @@ export default function TitlesScreen() {
 
       if (editingTitle) {
         await atualizarTitulo(editingTitle.id!, titleData);
-        const tipoTexto = tipo === 'pagar' ? 'Pagar' : 'Receber';
-        showSuccess(`Título a ${tipoTexto} atualizado: ${fornecedorCliente.trim()}`, { 
-          iconType: 'title',
-          title: 'Título atualizado',
-          duration: 3500,
-        });
+        const tipoTexto = tipo === "pagar" ? "Pagar" : "Receber";
+        showSuccess(
+          `Título a ${tipoTexto} atualizado: ${fornecedorCliente.trim()}`,
+          {
+            iconType: "title",
+            title: "Título atualizado",
+            duration: 3500,
+          },
+        );
       } else {
         await criarTitulo(titleData);
-        const tipoTexto = tipo === 'pagar' ? 'Pagar' : 'Receber';
+        const tipoTexto = tipo === "pagar" ? "Pagar" : "Receber";
         const nome = fornecedorCliente.trim();
-        showSuccess(nome ? `Título a ${tipoTexto} criado: ${nome}` : `Título a ${tipoTexto} criado`, { 
-          iconType: 'title',
-          title: 'Novo título criado',
-          duration: 4000,
-        });
+        showSuccess(
+          nome
+            ? `Título a ${tipoTexto} criado: ${nome}`
+            : `Título a ${tipoTexto} criado`,
+          {
+            iconType: "title",
+            title: "Novo título criado",
+            duration: 4000,
+          },
+        );
       }
 
       closeModal();
       await loadData();
     } catch (error: any) {
-      console.error('Erro ao salvar título:', error);
-      const errorMsg = error.message || 'Erro ao salvar título';
+      console.error("Erro ao salvar título:", error);
+      const errorMsg = error.message || "Erro ao salvar título";
       setModalError(errorMsg);
-      showError(errorMsg, { iconType: 'title' });
+      showError(errorMsg, { iconType: "title" });
     }
   };
 
   const handleMarkAsPaid = async (title: TitleWithAccount) => {
     if (!canEdit || !userId) {
-      showWarning('Você não tem permissão para marcar títulos como pagos.');
+      showWarning("Você não tem permissão para marcar títulos como pagos.");
       return;
     }
 
@@ -345,109 +404,110 @@ export default function TitlesScreen() {
         title.id!,
         undefined,
         title.conta_bancaria_id || undefined,
-        selectedCompany?.id ?? null
+        selectedCompany?.id ?? null,
       );
-      const tipoTexto = title.tipo === 'pagar' ? 'Pagar' : 'Receber';
-      showSuccess(`Título marcado como pago e transação criada`, { 
-        iconType: 'title',
+      const tipoTexto = title.tipo === "pagar" ? "Pagar" : "Receber";
+      showSuccess(`Título marcado como pago e transação criada`, {
+        iconType: "title",
         title: `${tipoTexto}: ${title.fornecedor_cliente}`,
         duration: 4000,
       });
       await loadData();
     } catch (error: any) {
-      console.error('Erro ao marcar como pago:', error);
-      showError(error.message || 'Não foi possível marcar como pago', { 
-        iconType: 'title',
-        title: 'Erro ao marcar título',
+      console.error("Erro ao marcar como pago:", error);
+      showError(error.message || "Não foi possível marcar como pago", {
+        iconType: "title",
+        title: "Erro ao marcar título",
       });
     }
   };
 
   const handleUnmarkAsPaid = async (title: TitleWithAccount) => {
     if (!canEdit) {
-      showWarning('Você não tem permissão para desmarcar títulos.');
+      showWarning("Você não tem permissão para desmarcar títulos.");
       return;
     }
 
-    Alert.alert(
-      'Desmarcar como pago',
-      'Deseja realmente desmarcar este título como pago?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Desmarcar',
-          onPress: async () => {
-            try {
-              await desmarcarTituloComoPago(title.id!);
-              showSuccess(`Título desmarcado: ${title.fornecedor_cliente}`, { 
-                iconType: 'title',
-                title: 'Status alterado para Pendente',
-                duration: 3500,
-              });
-              await loadData();
-            } catch (error: any) {
-              console.error('Erro ao desmarcar:', error);
-              showError(error.message || 'Não foi possível desmarcar o título', { 
-                iconType: 'title',
-                title: 'Erro ao alterar status',
-              });
-            }
-          },
-        },
-      ]
-    );
+    setTitleToUnmark(title);
+    setUnmarkTitleModalVisible(true);
+  };
+
+  const confirmUnmarkTitle = async () => {
+    if (!titleToUnmark) return;
+    try {
+      setUnmarkTitleModalVisible(false);
+      await desmarcarTituloComoPago(titleToUnmark.id!);
+      showSuccess(`Título desmarcado: ${titleToUnmark.fornecedor_cliente}`, {
+        iconType: "title",
+        title: "Status alterado para Pendente",
+        duration: 3500,
+      });
+      await loadData();
+    } catch (error: any) {
+      console.error("Erro ao desmarcar:", error);
+      showError(error.message || "Não foi possível desmarcar o título", {
+        iconType: "title",
+        title: "Erro ao alterar status",
+      });
+    } finally {
+      setTitleToUnmark(null);
+      setUnmarkTitleModalVisible(false);
+    }
   };
 
   const confirmDelete = (title: TitleWithAccount) => {
     if (!canDelete) {
-      showWarning('Você não tem permissão para deletar títulos.');
+      showWarning("Você não tem permissão para deletar títulos.");
       return;
     }
 
-    Alert.alert(
-      'Confirmar exclusão',
-      `Deseja realmente excluir o título "${title.fornecedor_cliente}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
+    setTitleToDelete(title);
+    setDeleteTitleModalVisible(true);
+  };
+
+  const confirmDeleteTitle = async () => {
+    if (!titleToDelete) return;
+    try {
+      setDeleteTitleModalVisible(false);
+      await deletarTitulo(titleToDelete.id!);
+      const tipoTexto = titleToDelete.tipo === "pagar" ? "Pagar" : "Receber";
+      showSuccess(
+        `Título a ${tipoTexto} excluído: ${titleToDelete.fornecedor_cliente}`,
         {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deletarTitulo(title.id!);
-              const tipoTexto = title.tipo === 'pagar' ? 'Pagar' : 'Receber';
-              showSuccess(`Título a ${tipoTexto} excluído: ${title.fornecedor_cliente}`, { 
-                iconType: 'title',
-                title: 'Título excluído',
-                duration: 3500,
-              });
-              await loadData();
-            } catch (error: any) {
-              console.error('Erro ao deletar título:', error);
-              showError(error.message || 'Não foi possível excluir o título', { 
-                iconType: 'title',
-                title: 'Erro ao excluir',
-              });
-            }
-          },
+          iconType: "title",
+          title: "Título excluído",
+          duration: 3500,
         },
-      ]
-    );
+      );
+      await loadData();
+    } catch (error: any) {
+      console.error("Erro ao deletar título:", error);
+      showError(error.message || "Não foi possível excluir o título", {
+        iconType: "title",
+        title: "Erro ao excluir",
+      });
+    } finally {
+      setTitleToDelete(null);
+      setDeleteTitleModalVisible(false);
+    }
   };
 
   // Filtros e ordenação
   const filteredAndSortedTitles = useMemo(() => {
     let result = titles.filter((title) => {
       // Filtro por tipo
-      const matchesTipo = filterTipo === 'all' || title.tipo === filterTipo;
+      const matchesTipo = filterTipo === "all" || title.tipo === filterTipo;
 
       // Filtro por status
-      const matchesStatus = filterStatus === 'all' || title.status === filterStatus;
+      const matchesStatus =
+        filterStatus === "all" || title.status === filterStatus;
 
       // Filtro por busca
       const matchesSearch =
-        searchQuery.trim() === '' ||
-        title.fornecedor_cliente.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        searchQuery.trim() === "" ||
+        title.fornecedor_cliente
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
         title.descricao?.toLowerCase().includes(searchQuery.toLowerCase());
 
       return matchesTipo && matchesStatus && matchesSearch;
@@ -456,17 +516,23 @@ export default function TitlesScreen() {
     // Ordenação
     result.sort((a, b) => {
       switch (sortBy) {
-        case 'vencimento-desc':
-          return new Date(b.data_vencimento).getTime() - new Date(a.data_vencimento).getTime();
-        case 'vencimento-asc':
-          return new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime();
-        case 'valor-desc':
+        case "vencimento-desc":
+          return (
+            new Date(b.data_vencimento).getTime() -
+            new Date(a.data_vencimento).getTime()
+          );
+        case "vencimento-asc":
+          return (
+            new Date(a.data_vencimento).getTime() -
+            new Date(b.data_vencimento).getTime()
+          );
+        case "valor-desc":
           return b.valor - a.valor;
-        case 'valor-asc':
+        case "valor-asc":
           return a.valor - b.valor;
-        case 'nome-asc':
+        case "nome-asc":
           return a.fornecedor_cliente.localeCompare(b.fornecedor_cliente);
-        case 'nome-desc':
+        case "nome-desc":
           return b.fornecedor_cliente.localeCompare(a.fornecedor_cliente);
         default:
           return 0;
@@ -477,44 +543,44 @@ export default function TitlesScreen() {
   }, [titles, filterTipo, filterStatus, searchQuery, sortBy]);
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('pt-BR');
+    const date = new Date(dateString + "T00:00:00");
+    return date.toLocaleDateString("pt-BR");
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pago':
-        return '#10B981';
-      case 'vencido':
-        return '#EF4444';
-      case 'pendente':
-        return '#FBBF24';
+      case "pago":
+        return "#10B981";
+      case "vencido":
+        return "#EF4444";
+      case "pendente":
+        return "#FBBF24";
       default:
-        return '#9CA3AF';
+        return "#9CA3AF";
     }
   };
 
   const getStatusBgColor = (status: string) => {
     switch (status) {
-      case 'pago':
-        return 'rgba(16, 185, 129, 0.2)';
-      case 'vencido':
-        return 'rgba(239, 68, 68, 0.2)';
-      case 'pendente':
-        return 'rgba(251, 191, 36, 0.2)';
+      case "pago":
+        return "rgba(16, 185, 129, 0.2)";
+      case "vencido":
+        return "rgba(239, 68, 68, 0.2)";
+      case "pendente":
+        return "rgba(251, 191, 36, 0.2)";
       default:
-        return 'rgba(156, 163, 175, 0.2)';
+        return "rgba(156, 163, 175, 0.2)";
     }
   };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'pago':
-        return 'Pago';
-      case 'vencido':
-        return 'Vencido';
-      case 'pendente':
-        return 'Pendente';
+      case "pago":
+        return "Pago";
+      case "vencido":
+        return "Vencido";
+      case "pendente":
+        return "Pendente";
       default:
         return status;
     }
@@ -524,9 +590,13 @@ export default function TitlesScreen() {
     return (
       <View style={styles.container}>
         <AnimatedBackground />
-        <View style={[styles.loadingContainer, { paddingTop: insets.top + 16 }]}>
+        <View
+          style={[styles.loadingContainer, { paddingTop: insets.top + 16 }]}
+        >
           <ActivityIndicator size="large" color="#00b09b" />
-          <ThemedText style={styles.loadingText}>Carregando títulos...</ThemedText>
+          <ThemedText style={styles.loadingText}>
+            Carregando títulos...
+          </ThemedText>
         </View>
       </View>
     );
@@ -538,14 +608,18 @@ export default function TitlesScreen() {
       <ScrollView
         ref={scrollRef}
         style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
-        showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 16 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <Animated.View style={headerStyle}>
           <ScreenHeader
             title="Títulos"
-            subtitle={`${titles.length} título${titles.length !== 1 ? 's' : ''} cadastrado${titles.length !== 1 ? 's' : ''}`}
+            subtitle={`${titles.length} título${titles.length !== 1 ? "s" : ""} cadastrado${titles.length !== 1 ? "s" : ""}`}
             rightAction={{
-              icon: 'add',
+              icon: "add",
               onPress: openModalAdd,
               visible: !isViewerOnly,
             }}
@@ -556,47 +630,61 @@ export default function TitlesScreen() {
         {/* Search Bar */}
         <Animated.View style={searchStyle}>
           <GlassContainer style={styles.searchContainer}>
-          <View style={styles.searchInputWrapper}>
-            <IconSymbol name="magnifyingglass" size={20} color="rgba(255, 255, 255, 0.6)" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Buscar por fornecedor/cliente ou descrição..."
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                style={styles.clearButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <IconSymbol name="xmark.circle.fill" size={20} color="rgba(255, 255, 255, 0.6)" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </GlassContainer>
+            <View style={styles.searchInputWrapper}>
+              <IconSymbol
+                name="magnifyingglass"
+                size={20}
+                color="rgba(255, 255, 255, 0.6)"
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar por fornecedor/cliente ou descrição..."
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery("")}
+                  style={styles.clearButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <IconSymbol
+                    name="xmark.circle.fill"
+                    size={20}
+                    color="rgba(255, 255, 255, 0.6)"
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          </GlassContainer>
         </Animated.View>
 
         {/* Sort */}
         <GlassContainer style={styles.sortContainer}>
-          <IconSymbol name="arrow.up.arrow.down" size={16} color="rgba(255, 255, 255, 0.6)" />
+          <IconSymbol
+            name="arrow.up.arrow.down"
+            size={16}
+            color="rgba(255, 255, 255, 0.6)"
+          />
           <TouchableOpacity
             onPress={() => {
               const sortOptions: SortType[] = [
-                'vencimento-desc',
-                'vencimento-asc',
-                'valor-desc',
-                'valor-asc',
-                'nome-asc',
-                'nome-desc',
+                "vencimento-desc",
+                "vencimento-asc",
+                "valor-desc",
+                "valor-asc",
+                "nome-asc",
+                "nome-desc",
               ];
               const currentIndex = sortOptions.indexOf(sortBy);
               const nextIndex = (currentIndex + 1) % sortOptions.length;
               setSortBy(sortOptions[nextIndex]);
             }}
-            style={styles.sortButton}>
+            style={styles.sortButton}
+          >
             <Text style={styles.sortText}>{getSortLabel(sortBy)}</Text>
           </TouchableOpacity>
         </GlassContainer>
@@ -604,38 +692,59 @@ export default function TitlesScreen() {
         {/* Filters - Tipo */}
         <View style={styles.filters}>
           <TouchableOpacity
-            style={[styles.filterButton, filterTipo === 'all' && styles.filterButtonActive]}
-            onPress={() => setFilterTipo('all')}
-            activeOpacity={0.7}>
+            style={[
+              styles.filterButton,
+              filterTipo === "all" && styles.filterButtonActive,
+            ]}
+            onPress={() => setFilterTipo("all")}
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.filterText,
-                filterTipo === 'all' ? styles.filterTextActive : styles.filterTextInactive,
-              ]}>
+                filterTipo === "all"
+                  ? styles.filterTextActive
+                  : styles.filterTextInactive,
+              ]}
+            >
               Todos
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, filterTipo === 'pagar' && styles.filterButtonActive]}
-            onPress={() => setFilterTipo('pagar')}
-            activeOpacity={0.7}>
+            style={[
+              styles.filterButton,
+              filterTipo === "pagar" && styles.filterButtonActive,
+            ]}
+            onPress={() => setFilterTipo("pagar")}
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.filterText,
-                filterTipo === 'pagar' ? styles.filterTextActive : styles.filterTextInactive,
-              ]}>
+                filterTipo === "pagar"
+                  ? styles.filterTextActive
+                  : styles.filterTextInactive,
+              ]}
+            >
               A Pagar
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, filterTipo === 'receber' && styles.filterButtonActive]}
-            onPress={() => setFilterTipo('receber')}
-            activeOpacity={0.7}>
+            style={[
+              styles.filterButton,
+              filterTipo === "receber" && styles.filterButtonActive,
+            ]}
+            onPress={() => setFilterTipo("receber")}
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.filterText,
-                filterTipo === 'receber' ? styles.filterTextActive : styles.filterTextInactive,
-              ]}>
+                filterTipo === "receber"
+                  ? styles.filterTextActive
+                  : styles.filterTextInactive,
+              ]}
+            >
               A Receber
             </Text>
           </TouchableOpacity>
@@ -644,50 +753,78 @@ export default function TitlesScreen() {
         {/* Filters - Status */}
         <View style={styles.filters}>
           <TouchableOpacity
-            style={[styles.filterButton, filterStatus === 'all' && styles.filterButtonActive]}
-            onPress={() => setFilterStatus('all')}
-            activeOpacity={0.7}>
+            style={[
+              styles.filterButton,
+              filterStatus === "all" && styles.filterButtonActive,
+            ]}
+            onPress={() => setFilterStatus("all")}
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.filterText,
-                filterStatus === 'all' ? styles.filterTextActive : styles.filterTextInactive,
-              ]}>
+                filterStatus === "all"
+                  ? styles.filterTextActive
+                  : styles.filterTextInactive,
+              ]}
+            >
               Todos
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, filterStatus === 'pendente' && styles.filterButtonActive]}
-            onPress={() => setFilterStatus('pendente')}
-            activeOpacity={0.7}>
+            style={[
+              styles.filterButton,
+              filterStatus === "pendente" && styles.filterButtonActive,
+            ]}
+            onPress={() => setFilterStatus("pendente")}
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.filterText,
-                filterStatus === 'pendente' ? styles.filterTextActive : styles.filterTextInactive,
-              ]}>
+                filterStatus === "pendente"
+                  ? styles.filterTextActive
+                  : styles.filterTextInactive,
+              ]}
+            >
               Pendente
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, filterStatus === 'pago' && styles.filterButtonActive]}
-            onPress={() => setFilterStatus('pago')}
-            activeOpacity={0.7}>
+            style={[
+              styles.filterButton,
+              filterStatus === "pago" && styles.filterButtonActive,
+            ]}
+            onPress={() => setFilterStatus("pago")}
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.filterText,
-                filterStatus === 'pago' ? styles.filterTextActive : styles.filterTextInactive,
-              ]}>
+                filterStatus === "pago"
+                  ? styles.filterTextActive
+                  : styles.filterTextInactive,
+              ]}
+            >
               Pago
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, filterStatus === 'vencido' && styles.filterButtonActive]}
-            onPress={() => setFilterStatus('vencido')}
-            activeOpacity={0.7}>
+            style={[
+              styles.filterButton,
+              filterStatus === "vencido" && styles.filterButtonActive,
+            ]}
+            onPress={() => setFilterStatus("vencido")}
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.filterText,
-                filterStatus === 'vencido' ? styles.filterTextActive : styles.filterTextInactive,
-              ]}>
+                filterStatus === "vencido"
+                  ? styles.filterTextActive
+                  : styles.filterTextInactive,
+              ]}
+            >
               Vencido
             </Text>
           </TouchableOpacity>
@@ -696,52 +833,81 @@ export default function TitlesScreen() {
         {/* Titles List */}
         {filteredAndSortedTitles.length === 0 ? (
           <GlassContainer style={styles.emptyState}>
-            <IconSymbol name="creditcard" size={48} color="rgba(255, 255, 255, 0.5)" />
-            <ThemedText style={styles.emptyStateText}>Nenhum título encontrado</ThemedText>
+            <IconSymbol
+              name="creditcard"
+              size={48}
+              color="rgba(255, 255, 255, 0.5)"
+            />
+            <ThemedText style={styles.emptyStateText}>
+              Nenhum título encontrado
+            </ThemedText>
             <ThemedText style={styles.emptyStateSubtext}>
-              {searchQuery ? 'Tente buscar com outros termos' : 'Adicione seu primeiro título'}
+              {searchQuery
+                ? "Tente buscar com outros termos"
+                : "Adicione seu primeiro título"}
             </ThemedText>
           </GlassContainer>
         ) : (
           <View style={styles.titlesList}>
             {filteredAndSortedTitles.map((title) => {
-              const contaDescricao = title.contas_bancarias?.descricao || 'Sem conta';
+              const contaDescricao =
+                title.contas_bancarias?.descricao || "Sem conta";
 
               return (
                 <GlassContainer key={title.id} style={styles.titleCard}>
                   <View style={styles.titleHeader}>
                     <View style={styles.titleIcon}>
                       <IconSymbol
-                        name={title.tipo === 'pagar' ? 'arrow.up.circle.fill' : 'arrow.down.circle.fill'}
+                        name={
+                          title.tipo === "pagar"
+                            ? "arrow.up.circle.fill"
+                            : "arrow.down.circle.fill"
+                        }
                         size={24}
-                        color={title.tipo === 'pagar' ? '#EF4444' : '#10B981'}
+                        color={title.tipo === "pagar" ? "#EF4444" : "#10B981"}
                       />
                     </View>
                     <View style={styles.titleInfo}>
-                      <ThemedText type="defaultSemiBold" style={styles.titleName}>
+                      <ThemedText
+                        type="defaultSemiBold"
+                        style={styles.titleName}
+                      >
                         {title.fornecedor_cliente}
                       </ThemedText>
                       {title.descricao && (
-                        <ThemedText style={styles.titleDescription}>{title.descricao}</ThemedText>
+                        <ThemedText style={styles.titleDescription}>
+                          {title.descricao}
+                        </ThemedText>
                       )}
                       <ThemedText style={styles.titleMeta}>
-                        {contaDescricao} • Vence: {formatDate(title.data_vencimento)}
+                        {contaDescricao} • Vence:{" "}
+                        {formatDate(title.data_vencimento)}
                       </ThemedText>
                     </View>
                     <View style={styles.titleRight}>
                       <Text
                         style={[
                           styles.titleValue,
-                          { color: title.tipo === 'pagar' ? '#EF4444' : '#10B981' },
-                        ]}>
+                          {
+                            color:
+                              title.tipo === "pagar" ? "#EF4444" : "#10B981",
+                          },
+                        ]}
+                      >
                         {formatCurrency(title.valor)}
                       </Text>
                       <View
                         style={[
                           styles.statusBadge,
                           { backgroundColor: getStatusBgColor(title.status) },
-                        ]}>
-                        <Text style={[styles.statusText, { color: getStatusColor(title.status) }]}>
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusText,
+                            { color: getStatusColor(title.status) },
+                          ]}
+                        >
                           {getStatusLabel(title.status)}
                         </Text>
                       </View>
@@ -750,24 +916,44 @@ export default function TitlesScreen() {
 
                   {(canEdit || canDelete) && (
                     <View style={styles.actionsRow}>
-                      {canEdit && title.status !== 'pago' && (
+                      {canEdit && title.status !== "pago" && (
                         <TouchableOpacity
                           onPress={() => handleMarkAsPaid(title)}
                           style={styles.actionButton}
-                          activeOpacity={0.7}>
-                          <IconSymbol name="checkmark.circle" size={16} color="#10B981" />
-                          <Text style={[styles.actionButtonText, { color: '#10B981' }]}>
+                          activeOpacity={0.7}
+                        >
+                          <IconSymbol
+                            name="checkmark.circle"
+                            size={16}
+                            color="#10B981"
+                          />
+                          <Text
+                            style={[
+                              styles.actionButtonText,
+                              { color: "#10B981" },
+                            ]}
+                          >
                             Marcar como Pago
                           </Text>
                         </TouchableOpacity>
                       )}
-                      {canEdit && title.status === 'pago' && (
+                      {canEdit && title.status === "pago" && (
                         <TouchableOpacity
                           onPress={() => handleUnmarkAsPaid(title)}
                           style={styles.actionButton}
-                          activeOpacity={0.7}>
-                          <IconSymbol name="arrow.counterclockwise" size={16} color="#FBBF24" />
-                          <Text style={[styles.actionButtonText, { color: '#FBBF24' }]}>
+                          activeOpacity={0.7}
+                        >
+                          <IconSymbol
+                            name="arrow.counterclockwise"
+                            size={16}
+                            color="#FBBF24"
+                          />
+                          <Text
+                            style={[
+                              styles.actionButtonText,
+                              { color: "#FBBF24" },
+                            ]}
+                          >
                             Desmarcar
                           </Text>
                         </TouchableOpacity>
@@ -776,7 +962,8 @@ export default function TitlesScreen() {
                         <TouchableOpacity
                           onPress={() => openModalEdit(title)}
                           style={styles.actionButton}
-                          activeOpacity={0.7}>
+                          activeOpacity={0.7}
+                        >
                           <IconSymbol name="pencil" size={16} color="#00b09b" />
                           <Text style={styles.actionButtonText}>Editar</Text>
                         </TouchableOpacity>
@@ -784,10 +971,16 @@ export default function TitlesScreen() {
                       {canDelete && (
                         <TouchableOpacity
                           onPress={() => confirmDelete(title)}
-                          style={[styles.actionButton, styles.actionButtonDanger]}
-                          activeOpacity={0.7}>
+                          style={[
+                            styles.actionButton,
+                            styles.actionButtonDanger,
+                          ]}
+                          activeOpacity={0.7}
+                        >
                           <IconSymbol name="trash" size={16} color="#EF4444" />
-                          <Text style={styles.actionButtonTextDanger}>Excluir</Text>
+                          <Text style={styles.actionButtonTextDanger}>
+                            Excluir
+                          </Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -800,7 +993,11 @@ export default function TitlesScreen() {
 
         {/* Add Button */}
         {!isViewerOnly && (
-          <TouchableOpacity style={styles.addButton} onPress={openModalAdd} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={openModalAdd}
+            activeOpacity={0.7}
+          >
             <IconSymbol name="plus.circle.fill" size={32} color="#00b09b" />
             <Text style={styles.addButtonText}>Adicionar Título</Text>
           </TouchableOpacity>
@@ -812,20 +1009,29 @@ export default function TitlesScreen() {
         visible={modalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={closeModal}>
+        onRequestClose={closeModal}
+      >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
             <AnimatedBackground />
             <ScrollView
               style={styles.modalScrollView}
               contentContainerStyle={styles.modalScrollContent}
-              showsVerticalScrollIndicator={false}>
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.modalHeader}>
                 <ThemedText type="title" style={styles.modalTitle}>
-                  {editingTitle ? 'Editar Título' : 'Novo Título'}
+                  {editingTitle ? "Editar Título" : "Novo Título"}
                 </ThemedText>
-                <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-                  <IconSymbol name="xmark.circle.fill" size={28} color="#FFFFFF" />
+                <TouchableOpacity
+                  onPress={closeModal}
+                  style={styles.closeButton}
+                >
+                  <IconSymbol
+                    name="xmark.circle.fill"
+                    size={28}
+                    color="#FFFFFF"
+                  />
                 </TouchableOpacity>
               </View>
 
@@ -835,26 +1041,36 @@ export default function TitlesScreen() {
                   <ThemedText style={styles.inputLabel}>Tipo *</ThemedText>
                   <View style={styles.typeButtons}>
                     <TouchableOpacity
-                      style={[styles.typeButton, tipo === 'pagar' && styles.typeButtonActive]}
-                      onPress={() => setTipo('pagar')}
-                      activeOpacity={0.7}>
+                      style={[
+                        styles.typeButton,
+                        tipo === "pagar" && styles.typeButtonActive,
+                      ]}
+                      onPress={() => setTipo("pagar")}
+                      activeOpacity={0.7}
+                    >
                       <Text
                         style={[
                           styles.typeButtonText,
-                          tipo === 'pagar' && styles.typeButtonTextActive,
-                        ]}>
+                          tipo === "pagar" && styles.typeButtonTextActive,
+                        ]}
+                      >
                         A Pagar
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.typeButton, tipo === 'receber' && styles.typeButtonActive]}
-                      onPress={() => setTipo('receber')}
-                      activeOpacity={0.7}>
+                      style={[
+                        styles.typeButton,
+                        tipo === "receber" && styles.typeButtonActive,
+                      ]}
+                      onPress={() => setTipo("receber")}
+                      activeOpacity={0.7}
+                    >
                       <Text
                         style={[
                           styles.typeButtonText,
-                          tipo === 'receber' && styles.typeButtonTextActive,
-                        ]}>
+                          tipo === "receber" && styles.typeButtonTextActive,
+                        ]}
+                      >
                         A Receber
                       </Text>
                     </TouchableOpacity>
@@ -864,15 +1080,20 @@ export default function TitlesScreen() {
                 {/* Fornecedor/Cliente */}
                 <View style={styles.inputContainer}>
                   <ThemedText style={styles.inputLabel}>
-                    {tipo === 'pagar' ? 'Fornecedor' : 'Cliente'} * ({fornecedorCliente.length}/100)
+                    {tipo === "pagar" ? "Fornecedor" : "Cliente"} * (
+                    {fornecedorCliente.length}/100)
                   </ThemedText>
                   <TextInput
                     value={fornecedorCliente}
                     onChangeText={(text) => {
                       setFornecedorCliente(text);
-                      setModalError('');
+                      setModalError("");
                     }}
-                    placeholder={tipo === 'pagar' ? 'Nome do fornecedor' : 'Nome do cliente'}
+                    placeholder={
+                      tipo === "pagar"
+                        ? "Nome do fornecedor"
+                        : "Nome do cliente"
+                    }
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     maxLength={100}
                     style={styles.input}
@@ -881,7 +1102,9 @@ export default function TitlesScreen() {
 
                 {/* Descrição */}
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.inputLabel}>Descrição ({descricao.length}/200)</ThemedText>
+                  <ThemedText style={styles.inputLabel}>
+                    Descrição ({descricao.length}/200)
+                  </ThemedText>
                   <TextInput
                     value={descricao}
                     onChangeText={setDescricao}
@@ -900,7 +1123,7 @@ export default function TitlesScreen() {
                     onChangeText={(text) => {
                       const formatted = formatCurrencyInput(text);
                       setValor(formatted);
-                      setModalError('');
+                      setModalError("");
                     }}
                     placeholder="R$ 0,00"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
@@ -911,13 +1134,15 @@ export default function TitlesScreen() {
 
                 {/* Data de Vencimento */}
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.inputLabel}>Data de Vencimento *</ThemedText>
+                  <ThemedText style={styles.inputLabel}>
+                    Data de Vencimento *
+                  </ThemedText>
                   <TextInput
                     value={dataVencimento}
                     onChangeText={(text) => {
                       const formatted = formatarDataBrasileira(text);
                       setDataVencimento(formatted);
-                      setModalError('');
+                      setModalError("");
                     }}
                     placeholder="DD/MM/YYYY (ex: 31/12/2024)"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
@@ -929,7 +1154,9 @@ export default function TitlesScreen() {
 
                 {/* Conta Bancária */}
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.inputLabel}>Conta Bancária</ThemedText>
+                  <ThemedText style={styles.inputLabel}>
+                    Conta Bancária
+                  </ThemedText>
                   <View style={styles.pickerContainer}>
                     <TouchableOpacity
                       onPress={() => {
@@ -937,26 +1164,32 @@ export default function TitlesScreen() {
                         if (contaBancariaId === null) {
                           setContaBancariaId(contas[0]?.id || null);
                         } else {
-                          const currentIndex = contas.findIndex((c) => c.id === contaBancariaId);
+                          const currentIndex = contas.findIndex(
+                            (c) => c.id === contaBancariaId,
+                          );
                           if (currentIndex === contas.length - 1) {
                             setContaBancariaId(null);
                           } else {
-                            setContaBancariaId(contas[currentIndex + 1]?.id || null);
+                            setContaBancariaId(
+                              contas[currentIndex + 1]?.id || null,
+                            );
                           }
                         }
                       }}
-                      style={styles.pickerButton}>
+                      style={styles.pickerButton}
+                    >
                       <Text style={styles.pickerText}>
                         {contaBancariaId
-                          ? contas.find((c) => c.id === contaBancariaId)?.descricao || 'Sem conta'
-                          : 'Sem conta'}
+                          ? contas.find((c) => c.id === contaBancariaId)
+                              ?.descricao || "Sem conta"
+                          : "Sem conta"}
                       </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
 
                 {/* Error Message */}
-                {modalError !== '' && (
+                {modalError !== "" && (
                   <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>{modalError}</Text>
                   </View>
@@ -965,7 +1198,7 @@ export default function TitlesScreen() {
                 {/* Actions */}
                 <View style={styles.modalActions}>
                   <Button
-                    title={editingTitle ? 'Atualizar' : 'Salvar'}
+                    title={editingTitle ? "Atualizar" : "Salvar"}
                     onPress={handleSave}
                     style={styles.saveButton}
                   />
@@ -982,18 +1215,162 @@ export default function TitlesScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de confirmação de exclusão de título */}
+      <Modal
+        visible={deleteTitleModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setDeleteTitleModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
+            <AnimatedBackground />
+            <ScrollView
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeader}>
+                <ThemedText type="title" style={styles.modalTitle}>
+                  Confirmar exclusão
+                </ThemedText>
+                <TouchableOpacity
+                  onPress={() => {
+                    setDeleteTitleModalVisible(false);
+                    setTitleToDelete(null);
+                  }}
+                  style={styles.closeButton}
+                >
+                  <IconSymbol
+                    name="xmark.circle.fill"
+                    size={28}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formContainer}>
+                <View style={styles.userEmailCard}>
+                  <ThemedText style={styles.userEmailLabel}>Título</ThemedText>
+                  <ThemedText
+                    type="defaultSemiBold"
+                    style={styles.userEmailValue}
+                  >
+                    {titleToDelete?.fornecedor_cliente}
+                  </ThemedText>
+                </View>
+
+                <ThemedText style={{ color: "rgba(255,255,255,0.85)" }}>
+                  ⚠️ Esta ação é permanente e não pode ser desfeita. Deseja
+                  excluir este título?
+                </ThemedText>
+
+                <View style={styles.modalActions}>
+                  <Button
+                    title="Cancelar"
+                    variant="outline"
+                    onPress={() => {
+                      setDeleteTitleModalVisible(false);
+                      setTitleToDelete(null);
+                    }}
+                  />
+                  <Button
+                    title="Excluir"
+                    style={{ backgroundColor: "#EF4444" }}
+                    onPress={confirmDeleteTitle}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+          <Toast config={toastConfig} topOffset={60} />
+        </View>
+      </Modal>
+
+      {/* Modal para desmarcar título como pago */}
+      <Modal
+        visible={unmarkTitleModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setUnmarkTitleModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
+            <AnimatedBackground />
+            <ScrollView
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeader}>
+                <ThemedText type="title" style={styles.modalTitle}>
+                  Desmarcar como pago
+                </ThemedText>
+                <TouchableOpacity
+                  onPress={() => {
+                    setUnmarkTitleModalVisible(false);
+                    setTitleToUnmark(null);
+                  }}
+                  style={styles.closeButton}
+                >
+                  <IconSymbol
+                    name="xmark.circle.fill"
+                    size={28}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formContainer}>
+                <View style={styles.userEmailCard}>
+                  <ThemedText style={styles.userEmailLabel}>Título</ThemedText>
+                  <ThemedText
+                    type="defaultSemiBold"
+                    style={styles.userEmailValue}
+                  >
+                    {titleToUnmark?.fornecedor_cliente}
+                  </ThemedText>
+                </View>
+
+                <ThemedText style={{ color: "rgba(255,255,255,0.85)" }}>
+                  Deseja realmente desmarcar este título como pago? Esta ação
+                  irá alterar o status para Pendente.
+                </ThemedText>
+
+                <View style={styles.modalActions}>
+                  <Button
+                    title="Cancelar"
+                    variant="outline"
+                    onPress={() => {
+                      setUnmarkTitleModalVisible(false);
+                      setTitleToUnmark(null);
+                    }}
+                  />
+                  <Button
+                    title="Desmarcar"
+                    style={{ backgroundColor: "#FBBF24" }}
+                    onPress={confirmUnmarkTitle}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+          <Toast config={toastConfig} topOffset={60} />
+        </View>
+      </Modal>
     </View>
   );
 }
 
 function getSortLabel(sortBy: SortType): string {
   const labels: Record<SortType, string> = {
-    'vencimento-desc': 'Vencimento ↓',
-    'vencimento-asc': 'Vencimento ↑',
-    'valor-desc': 'Valor ↓',
-    'valor-asc': 'Valor ↑',
-    'nome-asc': 'Nome A-Z',
-    'nome-desc': 'Nome Z-A',
+    "vencimento-desc": "Vencimento ↓",
+    "vencimento-asc": "Vencimento ↑",
+    "valor-desc": "Valor ↓",
+    "valor-asc": "Valor ↑",
+    "nome-asc": "Nome A-Z",
+    "nome-desc": "Nome Z-A",
   };
   return labels[sortBy];
 }
@@ -1010,47 +1387,47 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   loadingText: {
     marginTop: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
   },
   header: {
     marginBottom: 24,
   },
   title: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   subtitle: {
     fontSize: 14,
     marginTop: 4,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
   },
   searchContainer: {
     marginBottom: 12,
     padding: 12,
   },
   searchInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     paddingVertical: 8,
   },
   clearButton: {
     padding: 4,
   },
   sortContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 12,
     gap: 8,
     marginBottom: 12,
@@ -1060,11 +1437,11 @@ const styles = StyleSheet.create({
   },
   sortText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   filters: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginBottom: 12,
   },
@@ -1073,21 +1450,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   filterButtonActive: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   filterText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   filterTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   filterTextInactive: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   titlesList: {
     gap: 16,
@@ -1097,43 +1474,43 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   titleHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 12,
   },
   titleIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(0, 176, 155, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0, 176, 155, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   titleInfo: {
     flex: 1,
   },
   titleName: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
   },
   titleDescription: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
     fontSize: 14,
     marginTop: 2,
   },
   titleMeta: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: "rgba(255, 255, 255, 0.6)",
     fontSize: 12,
     marginTop: 4,
   },
   titleRight: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
     marginLeft: 8,
   },
   titleValue: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 4,
   },
   statusBadge: {
@@ -1143,76 +1520,76 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   actionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: "rgba(255, 255, 255, 0.1)",
   },
   actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: 'rgba(0, 176, 155, 0.2)',
+    backgroundColor: "rgba(0, 176, 155, 0.2)",
   },
   actionButtonDanger: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
   },
   actionButtonText: {
-    color: '#00b09b',
+    color: "#00b09b",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   actionButtonTextDanger: {
-    color: '#EF4444',
+    color: "#EF4444",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   emptyState: {
     padding: 32,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 16,
   },
   emptyStateText: {
     marginTop: 16,
     fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   emptyStateSubtext: {
     marginTop: 8,
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
-    textAlign: 'center',
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
   },
   addButton: {
     padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 8,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#00b09b',
-    borderStyle: 'dashed',
+    borderColor: "#00b09b",
+    borderStyle: "dashed",
   },
   addButtonText: {
     marginTop: 12,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#00b09b',
+    fontWeight: "600",
+    color: "#00b09b",
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
   modalContent: {
     flex: 1,
@@ -1225,13 +1602,13 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 24,
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 24,
   },
   closeButton: {
@@ -1245,22 +1622,22 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 8,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: "rgba(255, 255, 255, 0.2)",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   typeButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
   },
   typeButton: {
@@ -1268,28 +1645,28 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
   },
   typeButtonActive: {
-    backgroundColor: '#00b09b',
-    borderColor: '#00b09b',
+    backgroundColor: "#00b09b",
+    borderColor: "#00b09b",
   },
   typeButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: "600",
+    color: "rgba(255, 255, 255, 0.7)",
   },
   typeButtonTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: "rgba(255, 255, 255, 0.2)",
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   pickerButton: {
     paddingVertical: 12,
@@ -1297,31 +1674,31 @@ const styles = StyleSheet.create({
   },
   pickerText: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   errorContainer: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: "#EF4444",
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
   },
   errorText: {
-    color: '#EF4444',
+    color: "#EF4444",
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalActions: {
     marginTop: 24,
     gap: 12,
   },
   saveButton: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   cancelButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
 });

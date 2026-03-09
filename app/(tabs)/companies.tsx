@@ -1,16 +1,16 @@
-import { AnimatedBackground } from '@/components/animated-background';
-import { GlassContainer } from '@/components/glass-container';
-import { toastConfig } from '@/components/NotificationToast';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/ui/button';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useAuth } from '@/contexts/AuthContext';
-import { useCompany } from '@/contexts/CompanyContext';
-import { usePermissions } from '@/contexts/PermissionsContext';
-import { useNotification } from '@/hooks/use-notification';
-import { useScreenAnimations } from '@/hooks/use-screen-animations';
-import { useScrollToTop } from '@/hooks/use-scroll-to-top';
+import { AnimatedBackground } from "@/components/animated-background";
+import { GlassContainer } from "@/components/glass-container";
+import { toastConfig } from "@/components/NotificationToast";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { ThemedText } from "@/components/themed-text";
+import { Button } from "@/components/ui/button";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
+import { useNotification } from "@/hooks/use-notification";
+import { useScreenAnimations } from "@/hooks/use-screen-animations";
+import { useScrollToTop } from "@/hooks/use-scroll-to-top";
 import {
   atualizarEmpresa,
   buscarEmpresas,
@@ -23,11 +23,10 @@ import {
   validarCNPJ,
   validarEmail,
   type Company,
-} from '@/lib/services/companies';
-import React, { useEffect, useState } from 'react';
+} from "@/lib/services/companies";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Modal,
   ScrollView,
@@ -36,11 +35,11 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Toast from 'react-native-toast-message';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
-type FilterStatus = 'all' | 'active' | 'inactive';
+type FilterStatus = "all" | "active" | "inactive";
 
 export default function CompaniesScreen() {
   const insets = useSafeAreaInsets();
@@ -56,24 +55,28 @@ export default function CompaniesScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  // Modal de confirmação de exclusão de empresa
+  const [deleteCompanyModalVisible, setDeleteCompanyModalVisible] =
+    useState(false);
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Formulário
-  const [razaoSocial, setRazaoSocial] = useState('');
-  const [nomeFantasia, setNomeFantasia] = useState('');
-  const [cnpj, setCnpj] = useState('');
-  const [inscricaoEstadual, setInscricaoEstadual] = useState('');
-  const [inscricaoMunicipal, setInscricaoMunicipal] = useState('');
-  const [endereco, setEndereco] = useState('');
-  const [cidade, setCidade] = useState('');
-  const [estado, setEstado] = useState('');
-  const [cep, setCep] = useState('');
-  const [telefone, setTelefone] = useState('');
-  const [email, setEmail] = useState('');
-  const [observacoes, setObservacoes] = useState('');
+  const [razaoSocial, setRazaoSocial] = useState("");
+  const [nomeFantasia, setNomeFantasia] = useState("");
+  const [cnpj, setCnpj] = useState("");
+  const [inscricaoEstadual, setInscricaoEstadual] = useState("");
+  const [inscricaoMunicipal, setInscricaoMunicipal] = useState("");
+  const [endereco, setEndereco] = useState("");
+  const [cidade, setCidade] = useState("");
+  const [estado, setEstado] = useState("");
+  const [cep, setCep] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [email, setEmail] = useState("");
+  const [observacoes, setObservacoes] = useState("");
   const [ativa, setAtiva] = useState(true);
-  const [modalError, setModalError] = useState('');
+  const [modalError, setModalError] = useState("");
 
   useEffect(() => {
     loadCompanies();
@@ -81,35 +84,39 @@ export default function CompaniesScreen() {
 
   const loadCompanies = async () => {
     if (!userId) {
-      console.log('🏢 Empresas: Aguardando userId...');
+      console.log("🏢 Empresas: Aguardando userId...");
       setLoading(false);
       setCompanies([]);
       return;
     }
 
     try {
-      console.log('🏢 Empresas: Carregando dados para userId:', userId);
+      console.log("🏢 Empresas: Carregando dados para userId:", userId);
       setLoading(true);
       const { data, error } = await buscarEmpresas(userId);
 
       if (error) {
-        console.error('❌ Erro ao buscar empresas:', error);
+        console.error("❌ Erro ao buscar empresas:", error);
         setCompanies([]);
         setLoading(false);
-        showError('Não foi possível carregar as empresas', { iconType: 'company' });
+        showError("Não foi possível carregar as empresas", {
+          iconType: "company",
+        });
         return;
       }
 
       if (data) {
-        console.log('✅ Empresas carregadas:', data.length);
+        console.log("✅ Empresas carregadas:", data.length);
         setCompanies(data);
       } else {
         setCompanies([]);
       }
     } catch (error: any) {
-      console.error('❌ Erro ao carregar empresas:', error);
+      console.error("❌ Erro ao carregar empresas:", error);
       setCompanies([]);
-      showError(error?.message || 'Erro ao carregar empresas', { iconType: 'company' });
+      showError(error?.message || "Erro ao carregar empresas", {
+        iconType: "company",
+      });
     } finally {
       setLoading(false);
     }
@@ -117,7 +124,7 @@ export default function CompaniesScreen() {
 
   const openModalAdd = () => {
     if (isViewerOnly) {
-      showWarning('Você não tem permissão para adicionar empresas.');
+      showWarning("Você não tem permissão para adicionar empresas.");
       return;
     }
 
@@ -128,23 +135,23 @@ export default function CompaniesScreen() {
 
   const openModalEdit = (company: Company) => {
     if (!canEdit) {
-      showWarning('Você não tem permissão para editar empresas.');
+      showWarning("Você não tem permissão para editar empresas.");
       return;
     }
 
     setEditingCompany(company);
     setRazaoSocial(company.razao_social);
-    setNomeFantasia(company.nome_fantasia || '');
+    setNomeFantasia(company.nome_fantasia || "");
     setCnpj(formatarCNPJ(company.cnpj));
-    setInscricaoEstadual(company.inscricao_estadual || '');
-    setInscricaoMunicipal(company.inscricao_municipal || '');
-    setEndereco(company.endereco || '');
-    setCidade(company.cidade || '');
-    setEstado(company.estado || '');
-    setCep(company.cep ? formatarCEP(company.cep) : '');
-    setTelefone(company.telefone ? formatarTelefone(company.telefone) : '');
-    setEmail(company.email || '');
-    setObservacoes(company.observacoes || '');
+    setInscricaoEstadual(company.inscricao_estadual || "");
+    setInscricaoMunicipal(company.inscricao_municipal || "");
+    setEndereco(company.endereco || "");
+    setCidade(company.cidade || "");
+    setEstado(company.estado || "");
+    setCep(company.cep ? formatarCEP(company.cep) : "");
+    setTelefone(company.telefone ? formatarTelefone(company.telefone) : "");
+    setEmail(company.email || "");
+    setObservacoes(company.observacoes || "");
     setAtiva(company.ativa);
     setModalVisible(true);
   };
@@ -152,48 +159,48 @@ export default function CompaniesScreen() {
   const closeModal = () => {
     setModalVisible(false);
     setEditingCompany(null);
-    setModalError('');
+    setModalError("");
     resetForm();
   };
 
   const resetForm = () => {
-    setRazaoSocial('');
-    setNomeFantasia('');
-    setCnpj('');
-    setInscricaoEstadual('');
-    setInscricaoMunicipal('');
-    setEndereco('');
-    setCidade('');
-    setEstado('');
-    setCep('');
-    setTelefone('');
-    setEmail('');
-    setObservacoes('');
+    setRazaoSocial("");
+    setNomeFantasia("");
+    setCnpj("");
+    setInscricaoEstadual("");
+    setInscricaoMunicipal("");
+    setEndereco("");
+    setCidade("");
+    setEstado("");
+    setCep("");
+    setTelefone("");
+    setEmail("");
+    setObservacoes("");
     setAtiva(true);
-    setModalError('');
+    setModalError("");
   };
 
   const validateForm = (): boolean => {
     // Campos obrigatórios
     if (!razaoSocial.trim()) {
-      setModalError('Razão Social é obrigatória');
+      setModalError("Razão Social é obrigatória");
       return false;
     }
 
     if (!cnpj.trim()) {
-      setModalError('CNPJ é obrigatório');
+      setModalError("CNPJ é obrigatório");
       return false;
     }
 
     // Valida CNPJ
     if (!validarCNPJ(cnpj)) {
-      setModalError('CNPJ inválido');
+      setModalError("CNPJ inválido");
       return false;
     }
 
     // Valida email se preenchido
     if (email.trim() && !validarEmail(email)) {
-      setModalError('Email inválido');
+      setModalError("Email inválido");
       return false;
     }
 
@@ -214,8 +221,8 @@ export default function CompaniesScreen() {
         endereco: endereco.trim() || undefined,
         cidade: cidade.trim() || undefined,
         estado: estado.trim() || undefined,
-        cep: cep.replace(/\D/g, '') || undefined,
-        telefone: telefone.replace(/\D/g, '') || undefined,
+        cep: cep.replace(/\D/g, "") || undefined,
+        telefone: telefone.replace(/\D/g, "") || undefined,
         email: email.trim() || undefined,
         observacoes: observacoes.trim() || undefined,
         ativa,
@@ -226,84 +233,89 @@ export default function CompaniesScreen() {
         closeModal();
         await loadCompanies();
         const displayName = nomeFantasia.trim() || razaoSocial.trim();
-        showSuccess(`Empresa atualizada: ${displayName}`, { 
-          iconType: 'company',
-          title: 'Dados salvos',
+        showSuccess(`Empresa atualizada: ${displayName}`, {
+          iconType: "company",
+          title: "Dados salvos",
           duration: 3500,
         });
       } else {
         await criarEmpresa(companyData);
         const displayName = nomeFantasia.trim() || razaoSocial.trim();
-        showSuccess(displayName ? `Empresa cadastrada: ${displayName}` : 'Nova empresa cadastrada', { 
-          iconType: 'company',
-          title: 'Nova empresa criada',
-          duration: 4000,
-        });
+        showSuccess(
+          displayName
+            ? `Empresa cadastrada: ${displayName}`
+            : "Nova empresa cadastrada",
+          {
+            iconType: "company",
+            title: "Nova empresa criada",
+            duration: 4000,
+          },
+        );
         closeModal();
         await loadCompanies();
       }
     } catch (error: any) {
-      console.error('Erro ao salvar empresa:', error);
-      const errorMessage = error.message || 'Erro ao salvar empresa';
+      console.error("Erro ao salvar empresa:", error);
+      const errorMessage = error.message || "Erro ao salvar empresa";
       setModalError(errorMessage);
-      showError(errorMessage, { 
-        iconType: 'company',
-        title: editingCompany ? 'Erro ao atualizar' : 'Erro ao criar',
+      showError(errorMessage, {
+        iconType: "company",
+        title: editingCompany ? "Erro ao atualizar" : "Erro ao criar",
       });
     }
   };
 
   const confirmDelete = (company: Company) => {
     if (!canDelete) {
-      showWarning('Você não tem permissão para deletar empresas.');
+      showWarning("Você não tem permissão para deletar empresas.");
       return;
     }
 
-    Alert.alert(
-      'Confirmar exclusão',
-      `Deseja realmente excluir a empresa "${company.razao_social}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deletarEmpresa(company.id!);
-              const displayName = company.nome_fantasia || company.razao_social;
-              showSuccess(`Empresa excluída: ${displayName}`, { 
-                iconType: 'company',
-                title: 'Empresa removida',
-                duration: 3500,
-              });
-              await loadCompanies();
-            } catch (error: any) {
-              console.error('Erro ao deletar empresa:', error);
-              showError(error.message || 'Não foi possível excluir a empresa', { 
-                iconType: 'company',
-                title: 'Erro ao excluir',
-              });
-            }
-          },
-        },
-      ]
-    );
+    setCompanyToDelete(company);
+    setDeleteCompanyModalVisible(true);
+  };
+
+  const confirmDeleteCompany = async () => {
+    if (!companyToDelete) return;
+    try {
+      setDeleteCompanyModalVisible(false);
+      await deletarEmpresa(companyToDelete.id!);
+      const displayName =
+        companyToDelete.nome_fantasia || companyToDelete.razao_social;
+      showSuccess(`Empresa excluída: ${displayName}`, {
+        iconType: "company",
+        title: "Empresa removida",
+        duration: 3500,
+      });
+      await loadCompanies();
+    } catch (error: any) {
+      console.error("Erro ao deletar empresa:", error);
+      showError(error.message || "Não foi possível excluir a empresa", {
+        iconType: "company",
+        title: "Erro ao excluir",
+      });
+    } finally {
+      setCompanyToDelete(null);
+      setDeleteCompanyModalVisible(false);
+    }
   };
 
   // Filtros
   const filteredCompanies = companies.filter((company) => {
     // Filtro por status
     const matchesStatus =
-      filterStatus === 'all' ||
-      (filterStatus === 'active' && company.ativa) ||
-      (filterStatus === 'inactive' && !company.ativa);
+      filterStatus === "all" ||
+      (filterStatus === "active" && company.ativa) ||
+      (filterStatus === "inactive" && !company.ativa);
 
     // Filtro por busca
     const matchesSearch =
-      searchQuery.trim() === '' ||
+      searchQuery.trim() === "" ||
       company.razao_social.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      company.nome_fantasia?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      company.cnpj.includes(searchQuery.replace(/\D/g, ''));
+      company.nome_fantasia
+        ?.toLowerCase()
+        .includes(searchQuery.toLowerCase()) ||
+      company.cnpj.includes(searchQuery.replace(/\D/g, ""));
 
     return matchesStatus && matchesSearch;
   });
@@ -312,9 +324,13 @@ export default function CompaniesScreen() {
     return (
       <View style={styles.container}>
         <AnimatedBackground />
-        <View style={[styles.loadingContainer, { paddingTop: insets.top + 16 }]}>
+        <View
+          style={[styles.loadingContainer, { paddingTop: insets.top + 16 }]}
+        >
           <ActivityIndicator size="large" color="#00b09b" />
-          <ThemedText style={styles.loadingText}>Carregando empresas...</ThemedText>
+          <ThemedText style={styles.loadingText}>
+            Carregando empresas...
+          </ThemedText>
         </View>
       </View>
     );
@@ -326,14 +342,18 @@ export default function CompaniesScreen() {
       <ScrollView
         ref={scrollRef}
         style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
-        showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 16 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <Animated.View style={headerStyle}>
           <ScreenHeader
             title="Empresas"
-            subtitle={`${companies.length} empresa${companies.length !== 1 ? 's' : ''} cadastrada${companies.length !== 1 ? 's' : ''}`}
+            subtitle={`${companies.length} empresa${companies.length !== 1 ? "s" : ""} cadastrada${companies.length !== 1 ? "s" : ""}`}
             rightAction={{
-              icon: 'add',
+              icon: "add",
               onPress: openModalAdd,
               visible: !isViewerOnly,
             }}
@@ -344,64 +364,94 @@ export default function CompaniesScreen() {
         {/* Search Bar */}
         <Animated.View style={searchStyle}>
           <GlassContainer style={styles.searchContainer}>
-          <View style={styles.searchInputWrapper}>
-            <IconSymbol name="magnifyingglass" size={20} color="rgba(255, 255, 255, 0.6)" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Buscar por razão social, nome ou CNPJ..."
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                style={styles.clearButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <IconSymbol name="xmark.circle.fill" size={20} color="rgba(255, 255, 255, 0.6)" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </GlassContainer>
+            <View style={styles.searchInputWrapper}>
+              <IconSymbol
+                name="magnifyingglass"
+                size={20}
+                color="rgba(255, 255, 255, 0.6)"
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar por razão social, nome ou CNPJ..."
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery("")}
+                  style={styles.clearButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <IconSymbol
+                    name="xmark.circle.fill"
+                    size={20}
+                    color="rgba(255, 255, 255, 0.6)"
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          </GlassContainer>
         </Animated.View>
 
         {/* Filters */}
         <Animated.View style={[styles.filters, searchStyle]}>
           <TouchableOpacity
-            style={[styles.filterButton, filterStatus === 'all' && styles.filterButtonActive]}
-            onPress={() => setFilterStatus('all')}
-            activeOpacity={0.7}>
+            style={[
+              styles.filterButton,
+              filterStatus === "all" && styles.filterButtonActive,
+            ]}
+            onPress={() => setFilterStatus("all")}
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.filterText,
-                filterStatus === 'all' ? styles.filterTextActive : styles.filterTextInactive,
-              ]}>
+                filterStatus === "all"
+                  ? styles.filterTextActive
+                  : styles.filterTextInactive,
+              ]}
+            >
               Todas
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, filterStatus === 'active' && styles.filterButtonActive]}
-            onPress={() => setFilterStatus('active')}
-            activeOpacity={0.7}>
+            style={[
+              styles.filterButton,
+              filterStatus === "active" && styles.filterButtonActive,
+            ]}
+            onPress={() => setFilterStatus("active")}
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.filterText,
-                filterStatus === 'active' ? styles.filterTextActive : styles.filterTextInactive,
-              ]}>
+                filterStatus === "active"
+                  ? styles.filterTextActive
+                  : styles.filterTextInactive,
+              ]}
+            >
               Ativas
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, filterStatus === 'inactive' && styles.filterButtonActive]}
-            onPress={() => setFilterStatus('inactive')}
-            activeOpacity={0.7}>
+            style={[
+              styles.filterButton,
+              filterStatus === "inactive" && styles.filterButtonActive,
+            ]}
+            onPress={() => setFilterStatus("inactive")}
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.filterText,
-                filterStatus === 'inactive' ? styles.filterTextActive : styles.filterTextInactive,
-              ]}>
+                filterStatus === "inactive"
+                  ? styles.filterTextActive
+                  : styles.filterTextInactive,
+              ]}
+            >
               Inativas
             </Text>
           </TouchableOpacity>
@@ -410,10 +460,18 @@ export default function CompaniesScreen() {
         {/* Companies List */}
         {filteredCompanies.length === 0 ? (
           <GlassContainer style={styles.emptyState}>
-            <IconSymbol name="building.2" size={48} color="rgba(255, 255, 255, 0.5)" />
-            <ThemedText style={styles.emptyStateText}>Nenhuma empresa encontrada</ThemedText>
+            <IconSymbol
+              name="building.2"
+              size={48}
+              color="rgba(255, 255, 255, 0.5)"
+            />
+            <ThemedText style={styles.emptyStateText}>
+              Nenhuma empresa encontrada
+            </ThemedText>
             <ThemedText style={styles.emptyStateSubtext}>
-              {searchQuery ? 'Tente buscar com outros termos' : 'Adicione sua primeira empresa'}
+              {searchQuery
+                ? "Tente buscar com outros termos"
+                : "Adicione sua primeira empresa"}
             </ThemedText>
           </GlassContainer>
         ) : (
@@ -422,14 +480,23 @@ export default function CompaniesScreen() {
               <GlassContainer key={company.id} style={styles.companyCard}>
                 <View style={styles.companyHeader}>
                   <View style={styles.companyIcon}>
-                    <IconSymbol name="building.columns.fill" size={24} color="#00b09b" />
+                    <IconSymbol
+                      name="building.columns.fill"
+                      size={24}
+                      color="#00b09b"
+                    />
                   </View>
                   <View style={styles.companyInfo}>
-                    <ThemedText type="defaultSemiBold" style={styles.companyName}>
+                    <ThemedText
+                      type="defaultSemiBold"
+                      style={styles.companyName}
+                    >
                       {company.razao_social}
                     </ThemedText>
                     {company.nome_fantasia && (
-                      <ThemedText style={styles.companyFantasia}>{company.nome_fantasia}</ThemedText>
+                      <ThemedText style={styles.companyFantasia}>
+                        {company.nome_fantasia}
+                      </ThemedText>
                     )}
                     <ThemedText style={styles.companyMeta}>
                       CNPJ: {formatarCNPJ(company.cnpj)}
@@ -439,14 +506,20 @@ export default function CompaniesScreen() {
                     <View
                       style={[
                         styles.statusBadge,
-                        { backgroundColor: company.ativa ? 'rgba(16, 185, 129, 0.2)' : 'rgba(156, 163, 175, 0.2)' },
-                      ]}>
+                        {
+                          backgroundColor: company.ativa
+                            ? "rgba(16, 185, 129, 0.2)"
+                            : "rgba(156, 163, 175, 0.2)",
+                        },
+                      ]}
+                    >
                       <Text
                         style={[
                           styles.statusText,
-                          { color: company.ativa ? '#10B981' : '#9CA3AF' },
-                        ]}>
-                        {company.ativa ? 'Ativa' : 'Inativa'}
+                          { color: company.ativa ? "#10B981" : "#9CA3AF" },
+                        ]}
+                      >
+                        {company.ativa ? "Ativa" : "Inativa"}
                       </Text>
                     </View>
                   </View>
@@ -454,7 +527,11 @@ export default function CompaniesScreen() {
                 <View style={styles.companyDetails}>
                   {company.cidade && company.estado && (
                     <View style={styles.detailRow}>
-                      <IconSymbol name="location.fill" size={16} color="rgba(255, 255, 255, 0.7)" />
+                      <IconSymbol
+                        name="location.fill"
+                        size={16}
+                        color="rgba(255, 255, 255, 0.7)"
+                      />
                       <ThemedText style={styles.detailText}>
                         {company.cidade}/{company.estado}
                       </ThemedText>
@@ -462,7 +539,11 @@ export default function CompaniesScreen() {
                   )}
                   {company.telefone && (
                     <View style={styles.detailRow}>
-                      <IconSymbol name="phone.fill" size={16} color="rgba(255, 255, 255, 0.7)" />
+                      <IconSymbol
+                        name="phone.fill"
+                        size={16}
+                        color="rgba(255, 255, 255, 0.7)"
+                      />
                       <ThemedText style={styles.detailText}>
                         {formatarTelefone(company.telefone)}
                       </ThemedText>
@@ -470,7 +551,11 @@ export default function CompaniesScreen() {
                   )}
                   {company.email && (
                     <View style={styles.detailRow}>
-                      <IconSymbol name="envelope.fill" size={16} color="rgba(255, 255, 255, 0.7)" />
+                      <IconSymbol
+                        name="envelope.fill"
+                        size={16}
+                        color="rgba(255, 255, 255, 0.7)"
+                      />
                       <ThemedText style={styles.detailText}>
                         {company.email}
                       </ThemedText>
@@ -483,7 +568,8 @@ export default function CompaniesScreen() {
                       <TouchableOpacity
                         onPress={() => openModalEdit(company)}
                         style={styles.actionButton}
-                        activeOpacity={0.7}>
+                        activeOpacity={0.7}
+                      >
                         <IconSymbol name="pencil" size={16} color="#00b09b" />
                         <Text style={styles.actionButtonText}>Editar</Text>
                       </TouchableOpacity>
@@ -492,9 +578,12 @@ export default function CompaniesScreen() {
                       <TouchableOpacity
                         onPress={() => confirmDelete(company)}
                         style={[styles.actionButton, styles.actionButtonDanger]}
-                        activeOpacity={0.7}>
+                        activeOpacity={0.7}
+                      >
                         <IconSymbol name="trash" size={16} color="#EF4444" />
-                        <Text style={styles.actionButtonTextDanger}>Excluir</Text>
+                        <Text style={styles.actionButtonTextDanger}>
+                          Excluir
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -506,7 +595,11 @@ export default function CompaniesScreen() {
 
         {/* Add Button */}
         {!isViewerOnly && (
-          <TouchableOpacity style={styles.addButton} onPress={openModalAdd} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={openModalAdd}
+            activeOpacity={0.7}
+          >
             <IconSymbol name="plus.circle.fill" size={32} color="#00b09b" />
             <Text style={styles.addButtonText}>Adicionar Empresa</Text>
           </TouchableOpacity>
@@ -518,30 +611,39 @@ export default function CompaniesScreen() {
         visible={modalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={closeModal}>
+        onRequestClose={closeModal}
+      >
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={closeModal}>
+          onPress={closeModal}
+        >
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
-            style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
+            style={[styles.modalContent, { paddingTop: insets.top + 20 }]}
+          >
             <AnimatedBackground />
             <ScrollView
               style={styles.modalScrollView}
               contentContainerStyle={styles.modalScrollContent}
-              showsVerticalScrollIndicator={false}>
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.modalHeader}>
                 <ThemedText type="title" style={styles.modalTitle}>
-                  {editingCompany ? 'Editar Empresa' : 'Nova Empresa'}
+                  {editingCompany ? "Editar Empresa" : "Nova Empresa"}
                 </ThemedText>
                 <TouchableOpacity
                   onPress={closeModal}
                   style={styles.closeButton}
                   hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                  activeOpacity={0.7}>
-                  <IconSymbol name="xmark.circle.fill" size={32} color="rgba(255, 255, 255, 0.9)" />
+                  activeOpacity={0.7}
+                >
+                  <IconSymbol
+                    name="xmark.circle.fill"
+                    size={32}
+                    color="rgba(255, 255, 255, 0.9)"
+                  />
                 </TouchableOpacity>
               </View>
 
@@ -555,7 +657,7 @@ export default function CompaniesScreen() {
                     value={razaoSocial}
                     onChangeText={(text) => {
                       setRazaoSocial(text);
-                      setModalError('');
+                      setModalError("");
                     }}
                     placeholder="Nome oficial da empresa"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
@@ -587,7 +689,7 @@ export default function CompaniesScreen() {
                     onChangeText={(text) => {
                       const formatted = formatarCNPJ(text);
                       setCnpj(formatted);
-                      setModalError('');
+                      setModalError("");
                     }}
                     placeholder="00.000.000/0000-00"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
@@ -599,7 +701,9 @@ export default function CompaniesScreen() {
 
                 {/* Inscrição Estadual */}
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.inputLabel}>Inscrição Estadual</ThemedText>
+                  <ThemedText style={styles.inputLabel}>
+                    Inscrição Estadual
+                  </ThemedText>
                   <TextInput
                     value={inscricaoEstadual}
                     onChangeText={setInscricaoEstadual}
@@ -612,7 +716,9 @@ export default function CompaniesScreen() {
 
                 {/* Inscrição Municipal */}
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.inputLabel}>Inscrição Municipal</ThemedText>
+                  <ThemedText style={styles.inputLabel}>
+                    Inscrição Municipal
+                  </ThemedText>
                   <TextInput
                     value={inscricaoMunicipal}
                     onChangeText={setInscricaoMunicipal}
@@ -625,7 +731,9 @@ export default function CompaniesScreen() {
 
                 {/* Endereço */}
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.inputLabel}>Endereço ({endereco.length}/200)</ThemedText>
+                  <ThemedText style={styles.inputLabel}>
+                    Endereço ({endereco.length}/200)
+                  </ThemedText>
                   <TextInput
                     value={endereco}
                     onChangeText={setEndereco}
@@ -638,7 +746,9 @@ export default function CompaniesScreen() {
 
                 {/* Cidade */}
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.inputLabel}>Cidade ({cidade.length}/100)</ThemedText>
+                  <ThemedText style={styles.inputLabel}>
+                    Cidade ({cidade.length}/100)
+                  </ThemedText>
                   <TextInput
                     value={cidade}
                     onChangeText={setCidade}
@@ -693,12 +803,14 @@ export default function CompaniesScreen() {
 
                 {/* Email */}
                 <View style={styles.inputContainer}>
-                  <ThemedText style={styles.inputLabel}>Email ({email.length}/100)</ThemedText>
+                  <ThemedText style={styles.inputLabel}>
+                    Email ({email.length}/100)
+                  </ThemedText>
                   <TextInput
                     value={email}
                     onChangeText={(text) => {
                       setEmail(text);
-                      setModalError('');
+                      setModalError("");
                     }}
                     placeholder="contato@empresa.com.br (opcional)"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
@@ -732,16 +844,29 @@ export default function CompaniesScreen() {
                   <TouchableOpacity
                     onPress={() => setAtiva(!ativa)}
                     style={styles.switchButton}
-                    activeOpacity={0.7}>
-                    <View style={[styles.switchTrack, ativa && styles.switchTrackActive]}>
-                      <View style={[styles.switchThumb, ativa && styles.switchThumbActive]} />
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.switchTrack,
+                        ativa && styles.switchTrackActive,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.switchThumb,
+                          ativa && styles.switchThumbActive,
+                        ]}
+                      />
                     </View>
-                    <Text style={styles.switchText}>{ativa ? 'Ativa' : 'Inativa'}</Text>
+                    <Text style={styles.switchText}>
+                      {ativa ? "Ativa" : "Inativa"}
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
                 {/* Error Message */}
-                {modalError !== '' && (
+                {modalError !== "" && (
                   <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>{modalError}</Text>
                   </View>
@@ -750,7 +875,7 @@ export default function CompaniesScreen() {
                 {/* Actions */}
                 <View style={styles.modalActions}>
                   <Button
-                    title={editingCompany ? 'Atualizar' : 'Salvar'}
+                    title={editingCompany ? "Atualizar" : "Salvar"}
                     onPress={handleSave}
                     style={styles.saveButton}
                   />
@@ -766,6 +891,77 @@ export default function CompaniesScreen() {
             <Toast config={toastConfig} topOffset={60} />
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+      {/* Modal de confirmação de exclusão de empresa */}
+      <Modal
+        visible={deleteCompanyModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setDeleteCompanyModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingTop: 80 }]}>
+            <AnimatedBackground />
+            <ScrollView
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeader}>
+                <ThemedText type="title" style={styles.modalTitle}>
+                  Confirmar exclusão
+                </ThemedText>
+                <TouchableOpacity
+                  onPress={() => {
+                    setDeleteCompanyModalVisible(false);
+                    setCompanyToDelete(null);
+                  }}
+                  style={styles.closeButton}
+                >
+                  <IconSymbol
+                    name="xmark.circle.fill"
+                    size={28}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formContainer}>
+                <View style={{ marginBottom: 12 }}>
+                  <ThemedText style={{ color: "rgba(255,255,255,0.85)" }}>
+                    Deseja realmente excluir a empresa
+                  </ThemedText>
+                  <ThemedText type="defaultSemiBold" style={{ marginTop: 8 }}>
+                    {companyToDelete?.razao_social}
+                  </ThemedText>
+                </View>
+
+                <ThemedText
+                  style={{ color: "rgba(255,255,255,0.85)", marginBottom: 12 }}
+                >
+                  ⚠️ ATENÇÃO: Esta ação é permanente e não pode ser desfeita.
+                </ThemedText>
+
+                <View style={styles.modalActions}>
+                  <Button
+                    title="Cancelar"
+                    variant="outline"
+                    onPress={() => {
+                      setDeleteCompanyModalVisible(false);
+                      setCompanyToDelete(null);
+                    }}
+                  />
+                  <Button
+                    title="Excluir"
+                    style={{ backgroundColor: "#EF4444" }}
+                    onPress={confirmDeleteCompany}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+            <Toast config={toastConfig} topOffset={60} />
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -783,46 +979,46 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   loadingText: {
     marginTop: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
   },
   header: {
     marginBottom: 24,
   },
   title: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   subtitle: {
     fontSize: 14,
     marginTop: 4,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
   },
   searchContainer: {
     marginBottom: 12,
     padding: 12,
   },
   searchInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     paddingVertical: 8,
   },
   clearButton: {
     padding: 4,
   },
   filters: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginBottom: 20,
   },
@@ -831,21 +1027,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   filterButtonActive: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   filterText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   filterTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   filterTextInactive: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   companiesList: {
     gap: 16,
@@ -855,33 +1051,33 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   companyHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 12,
   },
   companyIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(0, 176, 155, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0, 176, 155, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   companyInfo: {
     flex: 1,
   },
   companyName: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
   },
   companyFantasia: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
     fontSize: 14,
     marginTop: 2,
   },
   companyMeta: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: "rgba(255, 255, 255, 0.6)",
     fontSize: 12,
     marginTop: 4,
   },
@@ -895,96 +1091,96 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   companyDetails: {
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: "rgba(255, 255, 255, 0.1)",
     gap: 8,
   },
   detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   detailText: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
     fontSize: 13,
     flex: 1,
   },
   actionsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: "rgba(255, 255, 255, 0.1)",
   },
   actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: 'rgba(0, 176, 155, 0.2)',
+    backgroundColor: "rgba(0, 176, 155, 0.2)",
   },
   actionButtonDanger: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
   },
   actionButtonText: {
-    color: '#00b09b',
+    color: "#00b09b",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   actionButtonTextDanger: {
-    color: '#EF4444',
+    color: "#EF4444",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   emptyState: {
     padding: 32,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 16,
   },
   emptyStateText: {
     marginTop: 16,
     fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   emptyStateSubtext: {
     marginTop: 8,
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
-    textAlign: 'center',
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
   },
   addButton: {
     padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 8,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#00b09b',
-    borderStyle: 'dashed',
+    borderColor: "#00b09b",
+    borderStyle: "dashed",
   },
   addButtonText: {
     marginTop: 12,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#00b09b',
+    fontWeight: "600",
+    color: "#00b09b",
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "flex-end",
   },
   modalContent: {
     flex: 1,
-    maxHeight: '95%',
+    maxHeight: "95%",
   },
   modalScrollView: {
     flex: 1,
@@ -994,19 +1190,19 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 24,
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 24,
   },
   closeButton: {
     padding: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     zIndex: 10,
   },
   formContainer: {
@@ -1017,79 +1213,79 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 8,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: "rgba(255, 255, 255, 0.2)",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   textArea: {
     minHeight: 100,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   switchContainer: {
     marginBottom: 16,
   },
   switchButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   switchTrack: {
     width: 52,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
     padding: 2,
   },
   switchTrackActive: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   switchThumb: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   switchThumbActive: {
     transform: [{ translateX: 22 }],
   },
   switchText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   errorContainer: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: "#EF4444",
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
   },
   errorText: {
-    color: '#EF4444',
+    color: "#EF4444",
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalActions: {
     marginTop: 24,
     gap: 12,
   },
   saveButton: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   cancelButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
 });
