@@ -1,7 +1,6 @@
-import { supabase } from '../supabase';
-import { criarTransacao, type Transaction } from './transactions';
-import { buscarContaPorId, type ContaBancaria } from '../contas';
-import { AVAILABLE_BANKS, getBankByCode } from './bank-integrations';
+import { supabase } from "../supabase";
+import { AVAILABLE_BANKS, getBankByCode } from "./bank-integrations";
+import { criarTransacao, type Transaction } from "./transactions";
 
 // Re-exportar para facilitar uso
 export { AVAILABLE_BANKS, getBankByCode };
@@ -10,18 +9,18 @@ export { AVAILABLE_BANKS, getBankByCode };
  * Tipos de operação de integração
  */
 export type IntegrationOperationType =
-  | 'consent_created'
-  | 'consent_renewed'
-  | 'consent_revoked'
-  | 'sync_transactions'
-  | 'sync_balance'
-  | 'token_refresh'
-  | 'error';
+  | "consent_created"
+  | "consent_renewed"
+  | "consent_revoked"
+  | "sync_transactions"
+  | "sync_balance"
+  | "token_refresh"
+  | "error";
 
 /**
  * Status de operação
  */
-export type OperationStatus = 'success' | 'error' | 'pending';
+export type OperationStatus = "success" | "error" | "pending";
 
 /**
  * Interface para conexão bancária Open Finance
@@ -29,16 +28,17 @@ export type OperationStatus = 'success' | 'error' | 'pending';
 export interface OpenFinanceConnection {
   id: string;
   user_id: string;
+  empresa_id?: number | null;
   conta_bancaria_id?: number | null;
   bank_code: number;
   bank_name: string;
   account_number: string;
-  account_type: 'checking' | 'savings' | 'investment';
-  provider: 'open_banking' | 'plugg' | 'belvo' | 'manual';
+  account_type: "checking" | "savings" | "investment";
+  provider: "open_banking" | "plugg" | "belvo" | "manual";
   access_token?: string | null;
   refresh_token?: string | null;
   expires_at?: string | null;
-  status: 'active' | 'expired' | 'error' | 'pending';
+  status: "active" | "expired" | "error" | "pending";
   last_sync_at?: string | null;
   pluggy_item_id?: string | null;
   created_at: string;
@@ -52,6 +52,7 @@ export interface IntegrationLog {
   id: number;
   connection_id?: string | null;
   user_id: string;
+  empresa_id?: number | null;
   operation_type: IntegrationOperationType;
   status: OperationStatus;
   message?: string | null;
@@ -69,7 +70,7 @@ export interface ImportedTransaction {
   description: string;
   amount: number;
   date: string; // YYYY-MM-DD
-  type: 'credit' | 'debit';
+  type: "credit" | "debit";
   category?: string;
   balance?: number;
 }
@@ -79,6 +80,7 @@ export interface ImportedTransaction {
  */
 export async function logIntegrationOperation(
   userId: string,
+  empresaId: number | null,
   operationType: IntegrationOperationType,
   status: OperationStatus,
   options?: {
@@ -87,63 +89,60 @@ export async function logIntegrationOperation(
     metadata?: any;
     errorMessage?: string;
     errorStack?: string;
-  }
+  },
 ): Promise<number> {
   try {
-    // Tentar usar RPC primeiro (mais eficiente)
-    const { data, error: rpcError } = await supabase.rpc('log_integration_operation', {
-      p_connection_id: options?.connectionId || null,
-      p_user_id: userId,
-      p_operation_type: operationType,
-      p_status: status,
-      p_message: options?.message || null,
-      p_metadata: options?.metadata || null,
-      p_error_message: options?.errorMessage || null,
-    });
+    const payload = {
+      connection_id: options?.connectionId || null,
+      user_id: userId,
+      empresa_id: empresaId,
+      operation_type: operationType,
+      status,
+      message: options?.message || null,
+      metadata: options?.metadata || null,
+      error_message: options?.errorMessage || null,
+      error_stack: options?.errorStack || null,
+    };
 
-    if (!rpcError) {
-      return data || 0;
-    }
+    let { data: insertData, error: insertError } = await supabase
+      .from("integration_logs")
+      .insert([payload])
+      .select("id")
+      .single();
 
-    // Se RPC não existe ou falhou, tentar inserção direta
-    if (rpcError.code === '42883' || rpcError.message?.includes('function') || rpcError.message?.includes('does not exist')) {
-      console.warn('Função RPC log_integration_operation não encontrada. Usando inserção direta.');
-      
-      const { data: insertData, error: insertError } = await supabase
-        .from('integration_logs')
-        .insert([
-          {
-            connection_id: options?.connectionId || null,
-            user_id: userId,
-            operation_type: operationType,
-            status,
-            message: options?.message || null,
-            metadata: options?.metadata || null,
-            error_message: options?.errorMessage || null,
-            error_stack: options?.errorStack || null,
-          },
-        ])
-        .select('id')
+    if (insertError && insertError.message?.includes("empresa_id")) {
+      // Compatibilidade temporária para ambientes ainda sem migração.
+      const fallbackPayload = { ...payload };
+      delete (fallbackPayload as any).empresa_id;
+
+      const fallback = await supabase
+        .from("integration_logs")
+        .insert([fallbackPayload])
+        .select("id")
         .single();
 
-      if (insertError) {
-        // Se a tabela não existe, apenas logar e retornar 0
-        if (insertError.code === 'PGRST116' || insertError.message?.includes('does not exist') || insertError.message?.includes('schema cache')) {
-          console.warn('Tabela integration_logs não encontrada. Log não foi registrado.');
-          return 0;
-        }
-        console.error('Erro ao registrar log (inserção direta):', insertError);
-        return 0;
-      }
-
-      return insertData?.id || 0;
+      insertData = fallback.data;
+      insertError = fallback.error;
     }
 
-    // Outros erros do RPC
-    console.error('Erro ao registrar log (RPC):', rpcError);
-    return 0;
+    if (insertError) {
+      if (
+        insertError.code === "PGRST116" ||
+        insertError.message?.includes("does not exist") ||
+        insertError.message?.includes("schema cache")
+      ) {
+        console.warn(
+          "Tabela integration_logs não encontrada. Log não foi registrado.",
+        );
+        return 0;
+      }
+      console.error("Erro ao registrar log:", insertError);
+      return 0;
+    }
+
+    return insertData?.id || 0;
   } catch (error: any) {
-    console.error('Erro ao registrar log:', error);
+    console.error("Erro ao registrar log:", error);
     return 0;
   }
 }
@@ -153,25 +152,31 @@ export async function logIntegrationOperation(
  */
 export async function getIntegrationLogs(
   userId: string,
+  empresaId: number | null,
   options?: {
     connectionId?: string;
     operationType?: IntegrationOperationType;
     limit?: number;
-  }
+  },
 ) {
   try {
     let query = supabase
-      .from('integration_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .from("integration_logs")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    query =
+      empresaId === null
+        ? query.is("empresa_id", null)
+        : query.eq("empresa_id", empresaId);
 
     if (options?.connectionId) {
-      query = query.eq('connection_id', options.connectionId);
+      query = query.eq("connection_id", options.connectionId);
     }
 
     if (options?.operationType) {
-      query = query.eq('operation_type', options.operationType);
+      query = query.eq("operation_type", options.operationType);
     }
 
     if (options?.limit) {
@@ -182,19 +187,31 @@ export async function getIntegrationLogs(
 
     if (error) {
       // Se a tabela não existe, retornar array vazio em vez de lançar erro
-      if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('schema cache')) {
-        console.warn('Tabela integration_logs não encontrada. Execute o script SQL de setup.');
+      if (
+        error.code === "PGRST116" ||
+        error.message?.includes("does not exist") ||
+        error.message?.includes("schema cache")
+      ) {
+        console.warn(
+          "Tabela integration_logs não encontrada. Execute o script SQL de setup.",
+        );
         return [];
       }
-      console.error('Erro ao buscar logs:', error);
+      console.error("Erro ao buscar logs:", error);
       throw error;
     }
 
     return (data || []) as IntegrationLog[];
   } catch (error: any) {
     // Tratamento adicional para erros de tabela não encontrada
-    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
-      console.warn('Tabela integration_logs não encontrada. Execute o script SQL de setup.');
+    if (
+      error?.code === "PGRST116" ||
+      error?.message?.includes("does not exist") ||
+      error?.message?.includes("schema cache")
+    ) {
+      console.warn(
+        "Tabela integration_logs não encontrada. Execute o script SQL de setup.",
+      );
       return [];
     }
     throw error;
@@ -206,27 +223,31 @@ export async function getIntegrationLogs(
  */
 export async function createOpenFinanceConnection(
   userId: string,
+  empresaId: number | null,
   connectionData: {
     conta_bancaria_id?: number;
     bank_code: number;
     bank_name: string;
     account_number: string;
-    account_type: 'checking' | 'savings' | 'investment';
-    provider: 'open_banking' | 'plugg' | 'belvo' | 'manual';
+    account_type: "checking" | "savings" | "investment";
+    provider: "open_banking" | "plugg" | "belvo" | "manual";
     access_token?: string;
     refresh_token?: string;
     expires_at?: string;
     pluggy_item_id?: string;
-    status?: 'active' | 'pending' | 'expired' | 'error';
-  }
+    status?: "active" | "pending" | "expired" | "error";
+  },
 ): Promise<OpenFinanceConnection> {
   try {
-    const status = connectionData.status ?? (connectionData.pluggy_item_id ? 'active' : 'pending');
+    const status =
+      connectionData.status ??
+      (connectionData.pluggy_item_id ? "active" : "pending");
     const { data, error } = await supabase
-      .from('bank_connections')
+      .from("bank_connections")
       .insert([
         {
           user_id: userId,
+          empresa_id: empresaId,
           ...connectionData,
           status,
         },
@@ -236,29 +257,50 @@ export async function createOpenFinanceConnection(
 
     if (error) {
       // Se a tabela não existe, informar o usuário
-      if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('schema cache')) {
-        throw new Error('Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.');
+      if (
+        error.code === "PGRST116" ||
+        error.message?.includes("does not exist") ||
+        error.message?.includes("schema cache")
+      ) {
+        throw new Error(
+          "Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.",
+        );
       }
-      console.error('Erro ao criar conexão:', error);
+      console.error("Erro ao criar conexão:", error);
       throw error;
     }
 
     // Registrar log (não bloquear se falhar)
     try {
-      await logIntegrationOperation(userId, 'consent_created', 'success', {
-        connectionId: data.id,
-        message: `Conexão criada com ${connectionData.bank_name}`,
-        metadata: { bank_code: connectionData.bank_code },
-      });
+      await logIntegrationOperation(
+        userId,
+        empresaId,
+        "consent_created",
+        "success",
+        {
+          connectionId: data.id,
+          message: `Conexão criada com ${connectionData.bank_name}`,
+          metadata: { bank_code: connectionData.bank_code },
+        },
+      );
     } catch (logError) {
       // Log de erro não deve impedir a criação da conexão
-      console.warn('Erro ao registrar log de integração (não crítico):', logError);
+      console.warn(
+        "Erro ao registrar log de integração (não crítico):",
+        logError,
+      );
     }
 
     return data as OpenFinanceConnection;
   } catch (error: any) {
-    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
-      throw new Error('Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.');
+    if (
+      error?.code === "PGRST116" ||
+      error?.message?.includes("does not exist") ||
+      error?.message?.includes("schema cache")
+    ) {
+      throw new Error(
+        "Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.",
+      );
     }
     throw error;
   }
@@ -268,30 +310,51 @@ export async function createOpenFinanceConnection(
  * Busca todas as conexões de um usuário
  */
 export async function getUserConnections(
-  userId: string
+  userId: string,
+  empresaId: number | null,
 ): Promise<OpenFinanceConnection[]> {
   try {
-    const { data, error } = await supabase
-      .from('bank_connections')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    let query = supabase
+      .from("bank_connections")
+      .select("*")
+      .eq("user_id", userId);
+
+    query =
+      empresaId === null
+        ? query.is("empresa_id", null)
+        : query.eq("empresa_id", empresaId);
+
+    const { data, error } = await query.order("created_at", {
+      ascending: false,
+    });
 
     if (error) {
       // Se a tabela não existe, retornar array vazio em vez de lançar erro
-      if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('schema cache')) {
-        console.warn('Tabela bank_connections não encontrada. Execute o script SQL de setup.');
+      if (
+        error.code === "PGRST116" ||
+        error.message?.includes("does not exist") ||
+        error.message?.includes("schema cache")
+      ) {
+        console.warn(
+          "Tabela bank_connections não encontrada. Execute o script SQL de setup.",
+        );
         return [];
       }
-      console.error('Erro ao buscar conexões:', error);
+      console.error("Erro ao buscar conexões:", error);
       throw error;
     }
 
     return (data || []) as OpenFinanceConnection[];
   } catch (error: any) {
     // Tratamento adicional para erros de tabela não encontrada
-    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
-      console.warn('Tabela bank_connections não encontrada. Execute o script SQL de setup.');
+    if (
+      error?.code === "PGRST116" ||
+      error?.message?.includes("does not exist") ||
+      error?.message?.includes("schema cache")
+    ) {
+      console.warn(
+        "Tabela bank_connections não encontrada. Execute o script SQL de setup.",
+      );
       return [];
     }
     throw error;
@@ -302,31 +365,39 @@ export async function getUserConnections(
  * Busca uma conexão específica
  */
 export async function getConnection(
-  connectionId: string
+  connectionId: string,
 ): Promise<OpenFinanceConnection | null> {
   try {
     const { data, error } = await supabase
-      .from('bank_connections')
-      .select('*')
-      .eq('id', connectionId)
+      .from("bank_connections")
+      .select("*")
+      .eq("id", connectionId)
       .single();
 
     if (error) {
       // Se a tabela não existe, retornar null em vez de lançar erro
-      if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('schema cache')) {
-        console.warn('Tabela bank_connections não encontrada.');
+      if (
+        error.code === "PGRST116" ||
+        error.message?.includes("does not exist") ||
+        error.message?.includes("schema cache")
+      ) {
+        console.warn("Tabela bank_connections não encontrada.");
         return null;
       }
-      console.error('Erro ao buscar conexão:', error);
+      console.error("Erro ao buscar conexão:", error);
       return null;
     }
 
     return data as OpenFinanceConnection;
   } catch (error: any) {
-    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
+    if (
+      error?.code === "PGRST116" ||
+      error?.message?.includes("does not exist") ||
+      error?.message?.includes("schema cache")
+    ) {
       return null;
     }
-    console.error('Erro ao buscar conexão:', error);
+    console.error("Erro ao buscar conexão:", error);
     return null;
   }
 }
@@ -336,32 +407,44 @@ export async function getConnection(
  */
 export async function updateConnection(
   connectionId: string,
-  updates: Partial<OpenFinanceConnection>
+  updates: Partial<OpenFinanceConnection>,
 ): Promise<OpenFinanceConnection> {
   try {
     const { data, error } = await supabase
-      .from('bank_connections')
+      .from("bank_connections")
       .update({
         ...updates,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', connectionId)
+      .eq("id", connectionId)
       .select()
       .single();
 
     if (error) {
       // Se a tabela não existe, informar o usuário
-      if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('schema cache')) {
-        throw new Error('Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.');
+      if (
+        error.code === "PGRST116" ||
+        error.message?.includes("does not exist") ||
+        error.message?.includes("schema cache")
+      ) {
+        throw new Error(
+          "Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.",
+        );
       }
-      console.error('Erro ao atualizar conexão:', error);
+      console.error("Erro ao atualizar conexão:", error);
       throw error;
     }
 
     return data as OpenFinanceConnection;
   } catch (error: any) {
-    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
-      throw new Error('Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.');
+    if (
+      error?.code === "PGRST116" ||
+      error?.message?.includes("does not exist") ||
+      error?.message?.includes("schema cache")
+    ) {
+      throw new Error(
+        "Tabela de conexões bancárias não encontrada. Execute o script SQL de setup no Supabase.",
+      );
     }
     throw error;
   }
@@ -373,29 +456,42 @@ export async function updateConnection(
 export async function renewConsent(
   connectionId: string,
   userId: string,
+  empresaId: number | null,
   newAccessToken: string,
   newRefreshToken: string,
-  expiresAt: string
+  expiresAt: string,
 ): Promise<OpenFinanceConnection> {
   try {
     const connection = await updateConnection(connectionId, {
       access_token: newAccessToken,
       refresh_token: newRefreshToken,
       expires_at: expiresAt,
-      status: 'active',
+      status: "active",
     });
 
-    await logIntegrationOperation(userId, 'consent_renewed', 'success', {
-      connectionId,
-      message: 'Consentimento renovado com sucesso',
-    });
+    await logIntegrationOperation(
+      userId,
+      empresaId,
+      "consent_renewed",
+      "success",
+      {
+        connectionId,
+        message: "Consentimento renovado com sucesso",
+      },
+    );
 
     return connection;
   } catch (error: any) {
-    await logIntegrationOperation(userId, 'consent_renewed', 'error', {
-      connectionId,
-      errorMessage: error.message,
-    });
+    await logIntegrationOperation(
+      userId,
+      empresaId,
+      "consent_renewed",
+      "error",
+      {
+        connectionId,
+        errorMessage: error.message,
+      },
+    );
     throw error;
   }
 }
@@ -405,24 +501,37 @@ export async function renewConsent(
  */
 export async function revokeConsent(
   connectionId: string,
-  userId: string
+  userId: string,
+  empresaId: number | null,
 ): Promise<void> {
   try {
     await updateConnection(connectionId, {
-      status: 'expired',
+      status: "expired",
       access_token: null,
       refresh_token: null,
     });
 
-    await logIntegrationOperation(userId, 'consent_revoked', 'success', {
-      connectionId,
-      message: 'Consentimento revogado',
-    });
+    await logIntegrationOperation(
+      userId,
+      empresaId,
+      "consent_revoked",
+      "success",
+      {
+        connectionId,
+        message: "Consentimento revogado",
+      },
+    );
   } catch (error: any) {
-    await logIntegrationOperation(userId, 'consent_revoked', 'error', {
-      connectionId,
-      errorMessage: error.message,
-    });
+    await logIntegrationOperation(
+      userId,
+      empresaId,
+      "consent_revoked",
+      "error",
+      {
+        connectionId,
+        errorMessage: error.message,
+      },
+    );
     throw error;
   }
 }
@@ -433,8 +542,9 @@ export async function revokeConsent(
 export async function importTransactions(
   connectionId: string,
   userId: string,
+  empresaId: number | null,
   transactions: ImportedTransaction[],
-  contaBancariaId?: number
+  contaBancariaId?: number,
 ): Promise<{ imported: number; errors: number; duplicates: number }> {
   let imported = 0;
   let errors = 0;
@@ -444,15 +554,22 @@ export async function importTransactions(
     for (const bankTx of transactions) {
       try {
         // 1. Verificar se já existe transação com esse bank_transaction_id
-        const { data: existingById, error: checkError } = await supabase
-          .from('transacoes')
-          .select('id')
-          .eq('bank_transaction_id', bankTx.bank_transaction_id)
-          .eq('codigo_empresa', userId)
-          .maybeSingle();
+        let duplicateByIdQuery = supabase
+          .from("transacoes")
+          .select("id")
+          .eq("bank_transaction_id", bankTx.bank_transaction_id)
+          .eq("codigo_empresa", userId);
+
+        duplicateByIdQuery =
+          empresaId === null
+            ? duplicateByIdQuery.is("empresa_id", null)
+            : duplicateByIdQuery.eq("empresa_id", empresaId);
+
+        const { data: existingById, error: checkError } =
+          await duplicateByIdQuery.maybeSingle();
 
         if (checkError) {
-          console.error('Erro ao verificar duplicata por ID:', checkError);
+          console.error("Erro ao verificar duplicata por ID:", checkError);
         }
 
         if (existingById) {
@@ -461,17 +578,24 @@ export async function importTransactions(
         }
 
         // 2. Verificar duplicata por valor + data + descrição (fallback)
-        const { data: existingByData, error: checkError2 } = await supabase
-          .from('transacoes')
-          .select('id')
-          .eq('codigo_empresa', userId)
-          .eq('valor', Math.abs(bankTx.amount))
-          .eq('data', bankTx.date)
-          .eq('descricao', bankTx.description)
-          .maybeSingle();
+        let duplicateByDataQuery = supabase
+          .from("transacoes")
+          .select("id")
+          .eq("codigo_empresa", userId)
+          .eq("valor", Math.abs(bankTx.amount))
+          .eq("data", bankTx.date)
+          .eq("descricao", bankTx.description);
+
+        duplicateByDataQuery =
+          empresaId === null
+            ? duplicateByDataQuery.is("empresa_id", null)
+            : duplicateByDataQuery.eq("empresa_id", empresaId);
+
+        const { data: existingByData, error: checkError2 } =
+          await duplicateByDataQuery.maybeSingle();
 
         if (checkError2) {
-          console.error('Erro ao verificar duplicata por dados:', checkError2);
+          console.error("Erro ao verificar duplicata por dados:", checkError2);
         }
 
         if (existingByData) {
@@ -480,16 +604,20 @@ export async function importTransactions(
         }
 
         // 3. Converter tipo do banco para tipo do sistema
-        const tipo = bankTx.type === 'credit' ? 'receita' : 'despesa';
+        const tipo = bankTx.type === "credit" ? "receita" : "despesa";
 
         // 4. Criar transação no sistema
-        const transaction: Omit<Transaction, 'id' | 'created_at' | 'updated_at'> = {
+        const transaction: Omit<
+          Transaction,
+          "id" | "created_at" | "updated_at"
+        > = {
           codigo_empresa: userId,
+          empresa_id: empresaId,
           descricao: bankTx.description,
           valor: Math.abs(bankTx.amount),
           data: bankTx.date,
           tipo,
-          categoria: bankTx.category || 'Importado do Banco',
+          categoria: bankTx.category || "Importado do Banco",
           conta_bancaria_id: contaBancariaId || null,
           bank_transaction_id: bankTx.bank_transaction_id, // Salvar ID do banco
         };
@@ -497,7 +625,10 @@ export async function importTransactions(
         await criarTransacao(transaction);
         imported++;
       } catch (error: any) {
-        console.error(`Erro ao importar transação ${bankTx.bank_transaction_id}:`, error);
+        console.error(
+          `Erro ao importar transação ${bankTx.bank_transaction_id}:`,
+          error,
+        );
         errors++;
       }
     }
@@ -508,18 +639,30 @@ export async function importTransactions(
     });
 
     // Registrar log
-    await logIntegrationOperation(userId, 'sync_transactions', 'success', {
-      connectionId,
-      message: `${imported} transações importadas, ${duplicates} duplicadas, ${errors} com erro`,
-      metadata: { imported, duplicates, errors, total: transactions.length },
-    });
+    await logIntegrationOperation(
+      userId,
+      empresaId,
+      "sync_transactions",
+      "success",
+      {
+        connectionId,
+        message: `${imported} transações importadas, ${duplicates} duplicadas, ${errors} com erro`,
+        metadata: { imported, duplicates, errors, total: transactions.length },
+      },
+    );
 
     return { imported, errors, duplicates };
   } catch (error: any) {
-    await logIntegrationOperation(userId, 'sync_transactions', 'error', {
-      connectionId,
-      errorMessage: error.message,
-    });
+    await logIntegrationOperation(
+      userId,
+      empresaId,
+      "sync_transactions",
+      "error",
+      {
+        connectionId,
+        errorMessage: error.message,
+      },
+    );
     throw error;
   }
 }
@@ -530,26 +673,33 @@ export async function importTransactions(
 export async function importBalance(
   connectionId: string,
   userId: string,
+  empresaId: number | null,
   balance: number,
-  contaBancariaId?: number
+  contaBancariaId?: number,
 ): Promise<void> {
   try {
     // Aqui você pode salvar o saldo em uma tabela específica ou atualizar a conta
     // Por enquanto, apenas registramos o log
     // TODO: Criar tabela de saldos se necessário
 
-    await logIntegrationOperation(userId, 'sync_balance', 'success', {
-      connectionId,
-      message: `Saldo importado: R$ ${balance.toFixed(2)}`,
-      metadata: { balance, conta_bancaria_id: contaBancariaId },
-    });
+    await logIntegrationOperation(
+      userId,
+      empresaId,
+      "sync_balance",
+      "success",
+      {
+        connectionId,
+        message: `Saldo importado: R$ ${balance.toFixed(2)}`,
+        metadata: { balance, conta_bancaria_id: contaBancariaId },
+      },
+    );
 
     // Atualizar last_sync_at
     await updateConnection(connectionId, {
       last_sync_at: new Date().toISOString(),
     });
   } catch (error: any) {
-    await logIntegrationOperation(userId, 'sync_balance', 'error', {
+    await logIntegrationOperation(userId, empresaId, "sync_balance", "error", {
       connectionId,
       errorMessage: error.message,
     });
@@ -569,10 +719,11 @@ export function isTokenExpired(expiresAt?: string | null): boolean {
  * Busca conexões expiradas que precisam de renovação
  */
 export async function getExpiredConnections(
-  userId: string
+  userId: string,
+  empresaId: number | null,
 ): Promise<OpenFinanceConnection[]> {
-  const connections = await getUserConnections(userId);
+  const connections = await getUserConnections(userId, empresaId);
   return connections.filter(
-    (conn) => conn.status === 'active' && isTokenExpired(conn.expires_at)
+    (conn) => conn.status === "active" && isTokenExpired(conn.expires_at),
   );
 }

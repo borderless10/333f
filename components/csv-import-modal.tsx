@@ -1,31 +1,36 @@
-import React, { useState } from 'react';
+import { toastConfig } from "@/components/NotificationToast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useNotification } from "@/hooks/use-notification";
+import { buscarContas, type ContaBancaria } from "@/lib/contas";
+import { criarTransacao, type Transaction } from "@/lib/services/transactions";
 import {
-  Alert,
+  generateCSVTemplate,
+  parseCSV,
+  validateTransactionCSV,
+  type ValidationResult,
+} from "@/lib/utils/csv-parser";
+import { formatCurrency } from "@/lib/utils/currency";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
-import { AnimatedBackground } from './animated-background';
-import { GlassContainer } from './glass-container';
-import { ThemedText } from './themed-text';
-import { IconSymbol } from './ui/icon-symbol';
-import { Button } from './ui/button';
-import { parseCSV, validateTransactionCSV, generateCSVTemplate, type ValidationResult } from '@/lib/utils/csv-parser';
-import { criarTransacao, type Transaction } from '@/lib/services/transactions';
-import { buscarContas, type ContaBancaria } from '@/lib/contas';
-import { useAuth } from '@/contexts/AuthContext';
-import { useNotification } from '@/hooks/use-notification';
-import { formatCurrency } from '@/lib/utils/currency';
-import Toast from 'react-native-toast-message';
-import { toastConfig } from '@/components/NotificationToast';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import { AnimatedBackground } from "./animated-background";
+import { GlassContainer } from "./glass-container";
+import { ThemedText } from "./themed-text";
+import { Button } from "./ui/button";
+import { IconSymbol } from "./ui/icon-symbol";
 
 interface CSVImportModalProps {
   visible: boolean;
@@ -33,14 +38,22 @@ interface CSVImportModalProps {
   onSuccess?: () => void;
 }
 
-export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalProps) {
+export function CSVImportModal({
+  visible,
+  onClose,
+  onSuccess,
+}: CSVImportModalProps) {
   const { userId } = useAuth();
+  const { selectedCompany } = useCompany();
   const { showSuccess, showError, showInfo } = useNotification();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<'select' | 'preview' | 'importing'>('select');
-  const [csvContent, setCsvContent] = useState('');
-  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [step, setStep] = useState<"select" | "preview" | "importing">(
+    "select",
+  );
+  const [csvContent, setCsvContent] = useState("");
+  const [validationResult, setValidationResult] =
+    useState<ValidationResult | null>(null);
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [importing, setImporting] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
@@ -49,21 +62,21 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
     if (visible && userId) {
       loadAccounts();
     }
-  }, [visible, userId]);
+  }, [visible, userId, selectedCompany]);
 
   const loadAccounts = async () => {
     try {
-      const accounts = await buscarContas(userId!);
+      const accounts = await buscarContas(userId!, selectedCompany?.id ?? null);
       setContas(accounts || []);
     } catch (error) {
-      console.error('Erro ao carregar contas:', error);
+      console.error("Erro ao carregar contas:", error);
     }
   };
 
   const handleSelectFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'text/csv',
+        type: "text/csv",
         copyToCacheDirectory: true,
       });
 
@@ -74,9 +87,12 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
       setLoading(true);
 
       // Ler conteúdo do arquivo
-      const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+      const fileContent = await FileSystem.readAsStringAsync(
+        result.assets[0].uri,
+        {
+          encoding: FileSystem.EncodingType.UTF8,
+        },
+      );
 
       setCsvContent(fileContent);
 
@@ -85,19 +101,26 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
       const validation = validateTransactionCSV(parsed, contas);
 
       setValidationResult(validation);
-      setStep('preview');
-      
+      setStep("preview");
+
       // Notificar se houver erros de validação
       if (validation.invalidRows.length > 0) {
-        showInfo(`Arquivo carregado. ${validation.invalidRows.length} linhas com erro serão ignoradas.`, {
-          iconType: 'export',
-          duration: 4000,
-        });
+        showInfo(
+          `Arquivo carregado. ${validation.invalidRows.length} linhas com erro serão ignoradas.`,
+          {
+            iconType: "export",
+            duration: 4000,
+          },
+        );
       } else {
-        showSuccess('Arquivo CSV validado com sucesso!', { iconType: 'export' });
+        showSuccess("Arquivo CSV validado com sucesso!", {
+          iconType: "export",
+        });
       }
     } catch (error: any) {
-      showError('Não foi possível ler o arquivo: ' + error.message, { iconType: 'export' });
+      showError("Não foi possível ler o arquivo: " + error.message, {
+        iconType: "export",
+      });
     } finally {
       setLoading(false);
     }
@@ -105,17 +128,55 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
 
   const handleDownloadTemplate = () => {
     const template = generateCSVTemplate();
-    // TODO: Implementar download do template
-    showInfo('Template CSV: use este formato para criar seu arquivo.', { 
-      iconType: 'export',
-      duration: 4000,
-    });
+    (async () => {
+      try {
+        const fileName = `template_transacoes.csv`;
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, template, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, { mimeType: "text/csv" });
+        } else {
+          showInfo(`Template salvo em: ${fileUri}`);
+        }
+      } catch (err: any) {
+        showError("Não foi possível gerar o template: " + err.message, {
+          iconType: "export",
+        });
+      }
+    })();
+  };
+
+  const handleDownloadErrors = async () => {
+    if (!validationResult || validationResult.errors.length === 0) {
+      showInfo("Não há erros para exportar.");
+      return;
+    }
+
+    try {
+      const content = validationResult.errors.join("\n");
+      const fileName = `erros_importacao.txt`;
+      const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+      await FileSystem.writeAsStringAsync(fileUri, content, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, { mimeType: "text/plain" });
+      } else {
+        showInfo(`Arquivo de erros salvo em: ${fileUri}`);
+      }
+    } catch (err: any) {
+      showError("Não foi possível exportar erros: " + err.message);
+    }
   };
 
   const handleImport = async () => {
     if (!validationResult || !userId) return;
 
-    setStep('importing');
+    setStep("importing");
     setImporting(true);
     setImportedCount(0);
 
@@ -125,36 +186,41 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
 
     for (let i = 0; i < validationResult.validRows.length; i++) {
       const row = validationResult.validRows[i];
-      
+
       try {
         // Encontrar conta bancária se informada
         let contaId: number | null = null;
         if (row.conta_bancaria) {
           const conta = contas.find(
-            c => c.descricao.toLowerCase() === row.conta_bancaria!.toLowerCase()
+            (c) =>
+              c.descricao.toLowerCase() === row.conta_bancaria!.toLowerCase(),
           );
           contaId = conta?.id || null;
         }
 
         // Converter valor
-        const valor = parseFloat(row.valor.replace(/[^\d,.-]/g, '').replace(',', '.'));
+        const valor = parseFloat(
+          row.valor.replace(/[^\d,.-]/g, "").replace(",", "."),
+        );
 
-        const transacao: Omit<Transaction, 'id' | 'created_at' | 'updated_at'> = {
-          codigo_empresa: userId,
-          descricao: row.descricao,
-          valor,
-          data: row.data,
-          tipo: row.tipo,
-          categoria: row.categoria,
-          conta_bancaria_id: contaId,
-        };
+        const transacao: Omit<Transaction, "id" | "created_at" | "updated_at"> =
+          {
+            codigo_empresa: userId,
+            empresa_id: selectedCompany?.id ?? null,
+            descricao: row.descricao,
+            valor,
+            data: row.data,
+            tipo: row.tipo,
+            categoria: row.categoria,
+            conta_bancaria_id: contaId,
+          };
 
         await criarTransacao(transacao);
         successCount++;
         setImportedCount(successCount);
       } catch (error: any) {
         errorCount++;
-        errors.push(`Linha ${i + 2}: ${error.message || 'Erro desconhecido'}`);
+        errors.push(`Linha ${i + 2}: ${error.message || "Erro desconhecido"}`);
       }
     }
 
@@ -162,36 +228,42 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
 
     if (successCount > 0) {
       showSuccess(
-        `${successCount} transações importadas com sucesso!${errorCount > 0 ? ` (${errorCount} erros)` : ''}`,
-        { 
-          iconType: 'export',
-          title: 'Importação concluída',
+        `${successCount} transações importadas com sucesso!${errorCount > 0 ? ` (${errorCount} erros)` : ""}`,
+        {
+          iconType: "export",
+          title: "Importação concluída",
           duration: 4000,
-        }
+        },
       );
       onSuccess?.();
       handleClose();
-      
+
       if (errorCount > 0 && errors.length > 0) {
         // Mostrar primeiros erros como informação adicional
         setTimeout(() => {
-          const primeirosErros = errors.slice(0, 3).join('\n');
-          showInfo(`Erros encontrados:\n${primeirosErros}${errors.length > 3 ? '\n...' : ''}`, {
-            iconType: 'export',
-            duration: 6000,
-          });
+          const primeirosErros = errors.slice(0, 3).join("\n");
+          showInfo(
+            `Erros encontrados:\n${primeirosErros}${errors.length > 3 ? "\n..." : ""}`,
+            {
+              iconType: "export",
+              duration: 6000,
+            },
+          );
         }, 1000);
       }
     } else {
-      showError('Nenhuma transação foi importada. Verifique os erros e tente novamente.', { 
-        iconType: 'export' 
-      });
+      showError(
+        "Nenhuma transação foi importada. Verifique os erros e tente novamente.",
+        {
+          iconType: "export",
+        },
+      );
     }
   };
 
   const handleClose = () => {
-    setStep('select');
-    setCsvContent('');
+    setStep("select");
+    setCsvContent("");
     setValidationResult(null);
     setImportedCount(0);
     onClose();
@@ -202,7 +274,8 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
       visible={visible}
       animationType="slide"
       transparent={false}
-      onRequestClose={handleClose}>
+      onRequestClose={handleClose}
+    >
       <View style={styles.modalContainer}>
         <AnimatedBackground />
         <View style={[styles.modalHeader, { paddingTop: insets.top + 16 }]}>
@@ -211,24 +284,29 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
               Importar Transações (CSV)
             </ThemedText>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <IconSymbol name="xmark.circle.fill" size={24} color="rgba(255, 255, 255, 0.7)" />
+              <IconSymbol
+                name="xmark.circle.fill"
+                size={24}
+                color="rgba(255, 255, 255, 0.7)"
+              />
             </TouchableOpacity>
           </View>
         </View>
 
-        {step === 'select' && (
-          <ScrollView 
+        {step === "select" && (
+          <ScrollView
             style={styles.scrollView}
             contentContainerStyle={[styles.content, { paddingTop: 16 }]}
-            showsVerticalScrollIndicator={false}>
+            showsVerticalScrollIndicator={false}
+          >
             <GlassContainer style={styles.instructionCard}>
               <ThemedText type="subtitle" style={styles.instructionTitle}>
                 Como usar:
               </ThemedText>
               <ThemedText style={styles.instructionText}>
-                1. Baixe o template CSV (opcional){'\n'}
-                2. Preencha com suas transações{'\n'}
-                3. Selecione o arquivo para importar{'\n'}
+                1. Baixe o template CSV (opcional){"\n"}
+                2. Preencha com suas transações{"\n"}
+                3. Selecione o arquivo para importar{"\n"}
                 4. Revise os dados antes de confirmar
               </ThemedText>
             </GlassContainer>
@@ -250,11 +328,12 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
           </ScrollView>
         )}
 
-        {step === 'preview' && validationResult && (
-          <ScrollView 
+        {step === "preview" && validationResult && (
+          <ScrollView
             style={styles.scrollView}
             contentContainerStyle={[styles.content, { paddingTop: 16 }]}
-            showsVerticalScrollIndicator={false}>
+            showsVerticalScrollIndicator={false}
+          >
             <GlassContainer style={styles.previewCard}>
               <ThemedText type="subtitle" style={styles.previewTitle}>
                 Preview da Importação
@@ -283,17 +362,20 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
                   <ThemedText style={styles.warningsTitle}>
                     Avisos ({validationResult.warnings.length}):
                   </ThemedText>
-                  {validationResult.warnings.slice(0, 5).map((warning, index) => (
-                    <Text key={index} style={styles.warningText}>
-                      • {warning}
-                    </Text>
-                  ))}
+                  {validationResult.warnings
+                    .slice(0, 5)
+                    .map((warning, index) => (
+                      <Text key={index} style={styles.warningText}>
+                        • {warning}
+                      </Text>
+                    ))}
                 </View>
               )}
 
               <View style={styles.summaryContainer}>
                 <ThemedText style={styles.summaryText}>
-                  ✅ {validationResult.validRows.length} transações válidas prontas para importar
+                  ✅ {validationResult.validRows.length} transações válidas
+                  prontas para importar
                 </ThemedText>
                 {validationResult.errors.length > 0 && (
                   <ThemedText style={styles.summaryText}>
@@ -304,14 +386,32 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
 
               {validationResult.validRows.length > 0 && (
                 <View style={styles.previewTable}>
-                  <ThemedText style={styles.tableHeader}>Primeiras 5 transações:</ThemedText>
+                  <ThemedText style={styles.tableHeader}>
+                    Primeiras 5 transações:
+                  </ThemedText>
                   {validationResult.validRows.slice(0, 5).map((row, index) => (
                     <View key={index} style={styles.tableRow}>
                       <Text style={styles.tableCell}>{row.descricao}</Text>
-                      <Text style={styles.tableCell}>{formatCurrency(parseFloat(row.valor.replace(/[^\d,.-]/g, '').replace(',', '.')))}</Text>
+                      <Text style={styles.tableCell}>
+                        {formatCurrency(
+                          parseFloat(
+                            row.valor
+                              .replace(/[^\d,.-]/g, "")
+                              .replace(",", "."),
+                          ),
+                        )}
+                      </Text>
                       <Text style={styles.tableCell}>{row.data}</Text>
-                      <Text style={[styles.tableCell, { color: row.tipo === 'receita' ? '#10B981' : '#EF4444' }]}>
-                        {row.tipo === 'receita' ? 'Receita' : 'Despesa'}
+                      <Text
+                        style={[
+                          styles.tableCell,
+                          {
+                            color:
+                              row.tipo === "receita" ? "#10B981" : "#EF4444",
+                          },
+                        ]}
+                      >
+                        {row.tipo === "receita" ? "Receita" : "Despesa"}
                       </Text>
                     </View>
                   ))}
@@ -321,14 +421,23 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
               <View style={styles.actions}>
                 <Button
                   title="Voltar"
-                  onPress={() => setStep('select')}
+                  onPress={() => setStep("select")}
                   variant="outline"
                   style={styles.button}
                 />
+                {validationResult.errors.length > 0 && (
+                  <Button
+                    title={`Exportar Erros (${validationResult.errors.length})`}
+                    onPress={handleDownloadErrors}
+                    variant="outline"
+                    style={styles.button}
+                  />
+                )}
                 {validationResult.validRows.length > 0 && (
                   <Button
                     title={`Importar ${validationResult.validRows.length} Transações`}
                     onPress={handleImport}
+                    loading={importing}
                     style={[styles.button, styles.primaryButton]}
                   />
                 )}
@@ -337,7 +446,7 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
           </ScrollView>
         )}
 
-        {step === 'importing' && (
+        {step === "importing" && (
           <View style={[styles.content, { paddingTop: 16 }]}>
             <GlassContainer style={styles.importingCard}>
               <ActivityIndicator size="large" color="#00b09b" />
@@ -345,7 +454,8 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
                 Importando Transações...
               </ThemedText>
               <ThemedText style={styles.importingText}>
-                {importedCount} de {validationResult?.validRows.length || 0} importadas
+                {importedCount} de {validationResult?.validRows.length || 0}{" "}
+                importadas
               </ThemedText>
             </GlassContainer>
           </View>
@@ -359,21 +469,21 @@ export function CSVImportModal({ visible, onClose, onSuccess }: CSVImportModalPr
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
-    backgroundColor: '#001a2e',
+    backgroundColor: "#001a2e",
   },
   modalHeader: {
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
   headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     flex: 1,
   },
   closeButton: {
@@ -392,11 +502,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   instructionTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     marginBottom: 12,
   },
   instructionText: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
     lineHeight: 24,
   },
   actions: {
@@ -406,44 +516,44 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   primaryButton: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   previewCard: {
     padding: 20,
   },
   previewTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     marginBottom: 20,
   },
   errorsContainer: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
   },
   errorsTitle: {
-    color: '#EF4444',
-    fontWeight: '600',
+    color: "#EF4444",
+    fontWeight: "600",
     marginBottom: 8,
   },
   errorText: {
-    color: '#EF4444',
+    color: "#EF4444",
     fontSize: 12,
     marginBottom: 4,
   },
   warningsContainer: {
-    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    backgroundColor: "rgba(251, 191, 36, 0.1)",
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
   },
   warningsTitle: {
-    color: '#FBBF24',
-    fontWeight: '600',
+    color: "#FBBF24",
+    fontWeight: "600",
     marginBottom: 8,
   },
   warningText: {
-    color: '#FBBF24',
+    color: "#FBBF24",
     fontSize: 12,
     marginBottom: 4,
   },
@@ -451,7 +561,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   summaryText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
     marginBottom: 8,
   },
@@ -460,31 +570,31 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   tableHeader: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: "#FFFFFF",
+    fontWeight: "600",
     marginBottom: 12,
   },
   tableRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
   tableCell: {
     flex: 1,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
     fontSize: 12,
   },
   importingCard: {
     padding: 40,
-    alignItems: 'center',
+    alignItems: "center",
   },
   importingTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     marginTop: 20,
     marginBottom: 12,
   },
   importingText: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
   },
 });

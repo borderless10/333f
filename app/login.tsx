@@ -20,6 +20,7 @@ import { AnimatedBackground } from "@/components/animated-background";
 import { GlassContainer } from "@/components/glass-container";
 import { ThemedText } from "@/components/themed-text";
 import { PasswordInput } from "@/components/ui/password-input";
+import { useAuth } from "@/contexts/AuthContext";
 import { TELOS_LOGO } from "@/lib/assets";
 import { supabase } from "@/lib/supabase";
 import { router } from "expo-router";
@@ -71,6 +72,7 @@ async function createSessionFromUrl(url: string): Promise<void> {
 }
 
 export default function LoginScreen() {
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -128,54 +130,50 @@ export default function LoginScreen() {
     setError(null);
 
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword(
-        {
-          email: email.trim(),
-          password: password,
-        },
-      );
-
-      if (authError) {
+      try {
+        await signIn(email.trim(), password);
+      } catch (authError: any) {
         // Mensagens de erro mais amigáveis e específicas
         let mensagemErro = "Erro ao fazer login.";
 
-        if (authError.message.includes("Invalid login credentials")) {
+        const authErrorMessage = authError?.message || "";
+
+        if (authErrorMessage.includes("Invalid login credentials")) {
           mensagemErro =
             "E-mail ou senha incorretos. Verifique suas credenciais e tente novamente.";
-        } else if (authError.message.includes("Email not confirmed")) {
+        } else if (authErrorMessage.includes("Email not confirmed")) {
           mensagemErro = "Por favor, confirme seu e-mail antes de fazer login.";
-        } else if (authError.message.includes("Too many requests")) {
+        } else if (authErrorMessage.includes("Too many requests")) {
           mensagemErro =
             "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.";
-        } else if (authError.message.includes("network")) {
+        } else if (
+          authErrorMessage.includes("network") ||
+          authErrorMessage.includes("Timeout ao realizar login")
+        ) {
           mensagemErro =
-            "Erro de conexão. Verifique sua internet e tente novamente.";
+            "A conexão está lenta. Verifique sua internet e tente novamente.";
         } else {
           mensagemErro =
-            authError.message || "Erro ao fazer login. Tente novamente.";
+            authErrorMessage || "Erro ao fazer login. Tente novamente.";
         }
 
         setError(mensagemErro);
         return;
       }
 
-      if (data.user) {
-        console.log("✅ Login bem-sucedido:", data.user.email);
-
-        // Persistir preferência de "Lembrar de mim"
-        if (rememberMe) {
-          await AsyncStorage.setItem("@telos_remember_me", "true");
-          await AsyncStorage.setItem("@telos_remembered_email", email.trim());
-        } else {
-          await AsyncStorage.multiRemove([
-            "@telos_remember_me",
-            "@telos_remembered_email",
-          ]);
-        }
-
-        // O redirecionamento é feito automaticamente pelo _layout.tsx
-        // após detectar que o usuário está autenticado
+      // Persistir preferência de "Lembrar de mim"
+      if (rememberMe) {
+        await AsyncStorage.setItem("@telos_remember_me", "true");
+        await AsyncStorage.setItem("@telos_remembered_email", email.trim());
+      } else {
+        await AsyncStorage.multiRemove([
+          "@telos_remember_me",
+          "@telos_remembered_email",
+        ]);
       }
+
+      // O redirecionamento é feito automaticamente pelo _layout.tsx
+      // após detectar que o usuário está autenticado
     } catch (err) {
       console.error("❌ Erro inesperado no login:", err);
       setError("Erro inesperado. Tente novamente.");

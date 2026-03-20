@@ -3,29 +3,34 @@
  * Fluxo inverso do LinkAccountModal: seleciona a conexão para vincular à conta
  */
 
-import React, { useState, useEffect } from 'react';
+import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useNotification } from "@/hooks/use-notification";
+import type { ContaBancaria } from "@/lib/contas";
+import { getBankByCode } from "@/lib/services/bank-integrations";
 import {
+  getUserConnections,
+  updateConnection,
+  type OpenFinanceConnection,
+} from "@/lib/services/open-finance";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
   Modal,
-  View,
+  ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AnimatedBackground } from './animated-background';
-import { GlassContainer } from './glass-container';
-import { ThemedText } from './themed-text';
-import { IconSymbol } from './ui/icon-symbol';
-import Toast from 'react-native-toast-message';
-import { toastConfig } from './NotificationToast';
-import { Button } from './ui/button';
-import { useAuth } from '@/contexts/AuthContext';
-import { useNotification } from '@/hooks/use-notification';
-import { getUserConnections, updateConnection, type OpenFinanceConnection } from '@/lib/services/open-finance';
-import { getBankByCode } from '@/lib/services/bank-integrations';
-import type { ContaBancaria } from '@/lib/contas';
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import { AnimatedBackground } from "./animated-background";
+import { GlassContainer } from "./glass-container";
+import { toastConfig } from "./NotificationToast";
+import { ThemedText } from "./themed-text";
+import { Button } from "./ui/button";
+import { IconSymbol } from "./ui/icon-symbol";
 
 interface LinkConnectionToAccountModalProps {
   visible: boolean;
@@ -42,11 +47,14 @@ export function LinkConnectionToAccountModal({
 }: LinkConnectionToAccountModalProps) {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
+  const { selectedCompany } = useCompany();
   const { showSuccess, showError } = useNotification();
 
   const [connections, setConnections] = useState<OpenFinanceConnection[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<
+    string | null
+  >(null);
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
 
@@ -57,12 +65,14 @@ export function LinkConnectionToAccountModal({
     if (!visible) {
       setSelectedConnectionId(null);
     }
-  }, [visible, userId]);
+  }, [visible, userId, selectedCompany]);
 
   useEffect(() => {
     // Pré-selecionar conexão já vinculada a esta conta
     if (account?.id && connections.length > 0) {
-      const linked = connections.find((c) => c.conta_bancaria_id === account.id);
+      const linked = connections.find(
+        (c) => c.conta_bancaria_id === account.id,
+      );
       setSelectedConnectionId(linked?.id ?? null);
     } else {
       setSelectedConnectionId(null);
@@ -74,11 +84,14 @@ export function LinkConnectionToAccountModal({
 
     try {
       setLoading(true);
-      const data = await getUserConnections(userId);
+      const data = await getUserConnections(
+        userId,
+        selectedCompany?.id ?? null,
+      );
       setConnections(data || []);
     } catch (error: any) {
-      console.error('Erro ao carregar conexões:', error);
-      showError('Não foi possível carregar as conexões');
+      console.error("Erro ao carregar conexões:", error);
+      showError("Não foi possível carregar as conexões");
     } finally {
       setLoading(false);
     }
@@ -95,18 +108,20 @@ export function LinkConnectionToAccountModal({
       });
 
       const conn = connections.find((c) => c.id === selectedConnectionId);
-      const bankName = conn ? getBankByCode(conn.bank_code)?.name || conn.bank_name : 'conexão';
+      const bankName = conn
+        ? getBankByCode(conn.bank_code)?.name || conn.bank_name
+        : "conexão";
 
       showSuccess(`Conta vinculada a ${bankName}`, {
-        iconType: 'link',
+        iconType: "link",
         title: account.descricao,
       });
 
       onSuccess?.();
       onClose();
     } catch (error: any) {
-      console.error('Erro ao vincular conta:', error);
-      showError(error.message || 'Não foi possível vincular a conexão');
+      console.error("Erro ao vincular conta:", error);
+      showError(error.message || "Não foi possível vincular a conexão");
     } finally {
       setLinking(false);
     }
@@ -117,7 +132,7 @@ export function LinkConnectionToAccountModal({
 
     const conn = connections.find((c) => c.id === selectedConnectionId);
     if (!conn || conn.conta_bancaria_id !== account.id) {
-      showError('Selecione a conexão vinculada para desvincular');
+      showError("Selecione a conexão vinculada para desvincular");
       return;
     }
 
@@ -128,8 +143,8 @@ export function LinkConnectionToAccountModal({
         conta_bancaria_id: null,
       });
 
-      showSuccess('Conexão desvinculada com sucesso', {
-        iconType: 'link',
+      showSuccess("Conexão desvinculada com sucesso", {
+        iconType: "link",
         title: account.descricao,
       });
 
@@ -137,8 +152,8 @@ export function LinkConnectionToAccountModal({
       onSuccess?.();
       onClose();
     } catch (error: any) {
-      console.error('Erro ao desvincular:', error);
-      showError(error.message || 'Não foi possível desvincular');
+      console.error("Erro ao desvincular:", error);
+      showError(error.message || "Não foi possível desvincular");
     } finally {
       setUnlinking(false);
     }
@@ -146,7 +161,9 @@ export function LinkConnectionToAccountModal({
 
   if (!account) return null;
 
-  const selectedConnection = connections.find((c) => c.id === selectedConnectionId);
+  const selectedConnection = connections.find(
+    (c) => c.id === selectedConnectionId,
+  );
   const canUnlink = selectedConnection?.conta_bancaria_id === account.id;
 
   return (
@@ -154,7 +171,8 @@ export function LinkConnectionToAccountModal({
       visible={visible}
       animationType="slide"
       transparent={true}
-      onRequestClose={onClose}>
+      onRequestClose={onClose}
+    >
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
           <AnimatedBackground />
@@ -179,8 +197,8 @@ export function LinkConnectionToAccountModal({
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}>
-
+            showsVerticalScrollIndicator={false}
+          >
             <GlassContainer style={styles.infoBox}>
               <IconSymbol name="info.circle.fill" size={20} color="#6366F1" />
               <ThemedText style={styles.infoText}>
@@ -192,11 +210,17 @@ export function LinkConnectionToAccountModal({
             {loading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#00b09b" />
-                <ThemedText style={styles.loadingText}>Carregando conexões...</ThemedText>
+                <ThemedText style={styles.loadingText}>
+                  Carregando conexões...
+                </ThemedText>
               </View>
             ) : connections.length === 0 ? (
               <GlassContainer style={styles.emptyState}>
-                <IconSymbol name="link.circle" size={48} color="rgba(255, 255, 255, 0.5)" />
+                <IconSymbol
+                  name="link.circle"
+                  size={48}
+                  color="rgba(255, 255, 255, 0.5)"
+                />
                 <ThemedText style={styles.emptyStateText}>
                   Nenhuma conexão Open Finance
                 </ThemedText>
@@ -213,11 +237,19 @@ export function LinkConnectionToAccountModal({
                 <View style={styles.connectionsList}>
                   {connections.map((conn) => {
                     const isSelected = selectedConnectionId === conn.id;
-                    const isLinkedToThisAccount = conn.conta_bancaria_id === account.id;
-                    const isLinkedToOther = conn.conta_bancaria_id != null && conn.conta_bancaria_id !== account.id;
-                    const bankName = getBankByCode(conn.bank_code)?.name || conn.bank_name;
-                    const accountType = conn.account_type === 'checking' ? 'Conta Corrente' :
-                      conn.account_type === 'savings' ? 'Poupança' : 'Investimento';
+                    const isLinkedToThisAccount =
+                      conn.conta_bancaria_id === account.id;
+                    const isLinkedToOther =
+                      conn.conta_bancaria_id != null &&
+                      conn.conta_bancaria_id !== account.id;
+                    const bankName =
+                      getBankByCode(conn.bank_code)?.name || conn.bank_name;
+                    const accountType =
+                      conn.account_type === "checking"
+                        ? "Conta Corrente"
+                        : conn.account_type === "savings"
+                          ? "Poupança"
+                          : "Investimento";
 
                     return (
                       <TouchableOpacity
@@ -227,18 +259,24 @@ export function LinkConnectionToAccountModal({
                         style={[
                           styles.connectionItem,
                           isSelected && styles.connectionItemSelected,
-                        ]}>
+                        ]}
+                      >
                         <View style={styles.connectionItemLeft}>
-                          <View style={[
-                            styles.radioCircle,
-                            isSelected && styles.radioCircleSelected,
-                          ]}>
+                          <View
+                            style={[
+                              styles.radioCircle,
+                              isSelected && styles.radioCircleSelected,
+                            ]}
+                          >
                             {isSelected && (
                               <View style={styles.radioCircleInner} />
                             )}
                           </View>
                           <View style={styles.connectionItemInfo}>
-                            <ThemedText type="defaultSemiBold" style={styles.connectionBank}>
+                            <ThemedText
+                              type="defaultSemiBold"
+                              style={styles.connectionBank}
+                            >
                               {bankName}
                             </ThemedText>
                             <ThemedText style={styles.connectionDetails}>
@@ -248,12 +286,16 @@ export function LinkConnectionToAccountModal({
                         </View>
                         {isLinkedToThisAccount && (
                           <View style={styles.linkedBadge}>
-                            <Text style={styles.linkedBadgeText}>Vinculada</Text>
+                            <Text style={styles.linkedBadgeText}>
+                              Vinculada
+                            </Text>
                           </View>
                         )}
                         {isLinkedToOther && (
                           <View style={styles.otherBadge}>
-                            <Text style={styles.otherBadgeText}>Outra conta</Text>
+                            <Text style={styles.otherBadgeText}>
+                              Outra conta
+                            </Text>
                           </View>
                         )}
                       </TouchableOpacity>
@@ -267,7 +309,7 @@ export function LinkConnectionToAccountModal({
           <View style={styles.modalActions}>
             {canUnlink && (
               <Button
-                title={unlinking ? 'Desvinculando...' : 'Desvincular'}
+                title={unlinking ? "Desvinculando..." : "Desvincular"}
                 onPress={handleUnlink}
                 disabled={unlinking || linking}
                 variant="outline"
@@ -275,9 +317,11 @@ export function LinkConnectionToAccountModal({
               />
             )}
             <Button
-              title={linking ? 'Vinculando...' : 'Vincular'}
+              title={linking ? "Vinculando..." : "Vincular"}
               onPress={handleLink}
-              disabled={!selectedConnectionId || loading || linking || unlinking}
+              disabled={
+                !selectedConnectionId || loading || linking || unlinking
+              }
               style={styles.linkButton}
             />
             <Button
@@ -298,22 +342,22 @@ export function LinkConnectionToAccountModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
   },
   modalContent: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingBottom: 16,
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     flex: 1,
   },
@@ -321,11 +365,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 20,
   },
   modalSubtitle: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
     fontSize: 14,
     marginTop: 2,
   },
@@ -340,8 +384,8 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   infoBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 12,
     padding: 16,
     marginBottom: 24,
@@ -350,58 +394,58 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 20,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
   },
   loadingContainer: {
     padding: 40,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 16,
   },
   loadingText: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
     fontSize: 14,
   },
   emptyState: {
     padding: 32,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 12,
   },
   emptyStateText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
-    textAlign: 'center',
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
     marginBottom: 16,
   },
   connectionsList: {
     gap: 12,
   },
   connectionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   connectionItemSelected: {
-    backgroundColor: 'rgba(0, 176, 155, 0.1)',
-    borderColor: '#00b09b',
+    backgroundColor: "rgba(0, 176, 155, 0.1)",
+    borderColor: "#00b09b",
   },
   connectionItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     flex: 1,
   },
@@ -410,68 +454,68 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   radioCircleSelected: {
-    borderColor: '#00b09b',
+    borderColor: "#00b09b",
   },
   radioCircleInner: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   connectionItemInfo: {
     flex: 1,
   },
   connectionBank: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
   },
   connectionDetails: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: "rgba(255, 255, 255, 0.6)",
     marginTop: 4,
   },
   linkedBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(0, 176, 155, 0.2)',
+    backgroundColor: "rgba(0, 176, 155, 0.2)",
   },
   linkedBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#00b09b',
+    fontWeight: "600",
+    color: "#00b09b",
   },
   otherBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+    backgroundColor: "rgba(251, 191, 36, 0.2)",
   },
   otherBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#FBBF24',
+    fontWeight: "600",
+    color: "#FBBF24",
   },
   modalActions: {
     padding: 20,
     gap: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: "rgba(255, 255, 255, 0.1)",
   },
   linkButton: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   unlinkButton: {
-    borderColor: '#EF4444',
+    borderColor: "#EF4444",
   },
   cancelButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
 });

@@ -1,42 +1,63 @@
-import { AnimatedBackground } from '@/components/animated-background';
-import { GlassContainer } from '@/components/glass-container';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { ThemedText } from '@/components/themed-text';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { NewTransactionModal } from '@/components/new-transaction-modal';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/contexts/AuthContext';
-import { useCompany } from '@/contexts/CompanyContext';
-import { buscarTransacoes, type TransactionWithAccount } from '@/lib/services/transactions';
-import { formatCurrency } from '@/lib/utils/currency';
-import { useScrollToTop } from '@/hooks/use-scroll-to-top';
-import { useScreenAnimations } from '@/hooks/use-screen-animations';
-import { useNotification } from '@/hooks/use-notification';
+import { AnimatedBackground } from "@/components/animated-background";
+import { GlassContainer } from "@/components/glass-container";
+import { NewTransactionModal } from "@/components/new-transaction-modal";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { ThemedText } from "@/components/themed-text";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useNotification } from "@/hooks/use-notification";
+import { useScreenAnimations } from "@/hooks/use-screen-animations";
+import { useScrollToTop } from "@/hooks/use-scroll-to-top";
+import {
+  buscarTransacoes,
+  type TransactionWithAccount,
+} from "@/lib/services/transactions";
+import { formatCurrency } from "@/lib/utils/currency";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type FilterType = 'all' | 'income' | 'expense';
-type SortType = 'date-desc' | 'date-asc' | 'value-desc' | 'value-asc' | 'name-asc' | 'name-desc';
+type FilterType = "all" | "income" | "expense";
+type SortType =
+  | "date-desc"
+  | "date-asc"
+  | "value-desc"
+  | "value-asc"
+  | "name-asc"
+  | "name-desc";
 
 export default function TransactionsScreen() {
-  const [filter, setFilter] = useState<FilterType>('all');
-  const [sortBy, setSortBy] = useState<SortType>('date-desc');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [transactions, setTransactions] = useState<TransactionWithAccount[]>([]);
+  const [filter, setFilter] = useState<FilterType>("all");
+  const [sortBy, setSortBy] = useState<SortType>("date-desc");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [transactions, setTransactions] = useState<TransactionWithAccount[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [newTransactionVisible, setNewTransactionVisible] = useState(false);
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const { selectedCompany } = useCompany();
-  const { showError, showSuccess } = useNotification();
+  const { showError, showSuccess, showTransactionSuccess } = useNotification();
   const scrollRef = useScrollToTop(); // ✅ Hook para resetar scroll
   const { animatedStyle: headerStyle } = useScreenAnimations(0);
   const { animatedStyle: searchStyle } = useScreenAnimations(100);
   const { animatedStyle: filtersStyle } = useScreenAnimations(150);
-  
+
   // Animações para itens da lista
-  const [transactionAnims, setTransactionAnims] = useState<Animated.Value[]>([]);
+  const [transactionAnims, setTransactionAnims] = useState<Animated.Value[]>(
+    [],
+  );
 
   // Carrega transações do Supabase
   useEffect(() => {
@@ -45,94 +66,121 @@ export default function TransactionsScreen() {
 
   const loadTransactions = async () => {
     if (!userId) {
-      console.log('📊 Transações: Aguardando userId...');
+      console.log("📊 Transações: Aguardando userId...");
       setLoading(false);
       setTransactions([]);
       return;
     }
 
     try {
-      console.log('📊 Transações: Carregando dados para userId:', userId, 'empresaId:', selectedCompany?.id);
+      console.log(
+        "📊 Transações: Carregando dados para userId:",
+        userId,
+        "empresaId:",
+        selectedCompany?.id,
+      );
       setLoading(true);
-      const { data, error } = await buscarTransacoes(userId, selectedCompany?.id ?? null);
-      
+      const { data, error } = await buscarTransacoes(
+        userId,
+        selectedCompany?.id ?? null,
+      );
+
       if (error) {
-        console.error('❌ Erro ao buscar transações:', error);
+        console.error("❌ Erro ao buscar transações:", error);
         setTransactions([]);
         setLoading(false);
-        showError('Não foi possível carregar as transações. Tente novamente.');
+        showError("Não foi possível carregar as transações. Tente novamente.");
         return;
       }
-      
+
       if (data) {
-        console.log('✅ Transações carregadas:', data.length);
+        console.log("✅ Transações carregadas:", data.length);
         setTransactions(data);
       } else {
         setTransactions([]);
       }
     } catch (error) {
-      console.error('❌ Erro ao carregar transações:', error);
+      console.error("❌ Erro ao carregar transações:", error);
       setTransactions([]);
-      showError('Erro ao carregar transações. Tente novamente.');
+      showError("Erro ao carregar transações. Tente novamente.");
     } finally {
       setLoading(false);
     }
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T00:00:00');
+    const date = new Date(dateString + "T00:00:00");
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    if (date.toDateString() === today.toDateString()) return 'Hoje';
-    if (date.toDateString() === yesterday.toDateString()) return 'Ontem';
-    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    if (date.toDateString() === today.toDateString()) return "Hoje";
+    if (date.toDateString() === yesterday.toDateString()) return "Ontem";
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    });
   };
 
   // Filtro e ordenação com useMemo para otimização
   const filteredAndSortedTransactions = useMemo(() => {
     let result = transactions.filter((transaction) => {
       // Filtro por tipo (receita/despesa/todas)
-      const tipo = transaction.tipo === 'receita' ? 'income' : 'expense';
-      const matchesFilter = filter === 'all' || tipo === filter;
-      
+      const tipo = transaction.tipo === "receita" ? "income" : "expense";
+      const matchesFilter = filter === "all" || tipo === filter;
+
       // Filtro por busca (descrição, categoria ou conta)
-      const contaDescricao = transaction.contas_bancarias?.descricao || 'Sem conta';
-      const matchesSearch = searchQuery.trim() === '' || 
-        transaction.descricao.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        transaction.categoria.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      const contaDescricao =
+        transaction.contas_bancarias?.descricao || "Sem conta";
+      const matchesSearch =
+        searchQuery.trim() === "" ||
+        transaction.descricao
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        transaction.categoria
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
         contaDescricao.toLowerCase().includes(searchQuery.toLowerCase());
-      
+
       return matchesFilter && matchesSearch;
     });
 
     // Ordenação
     result.sort((a, b) => {
       switch (sortBy) {
-        case 'date-desc':
+        case "date-desc":
           // Ordenar por data (decrescente), e se a data for igual, por created_at (decrescente)
-          const dateDiff = new Date(b.data).getTime() - new Date(a.data).getTime();
+          const dateDiff =
+            new Date(b.data).getTime() - new Date(a.data).getTime();
           if (dateDiff !== 0) return dateDiff;
           // Se as datas forem iguais, ordenar por created_at (mais recente primeiro)
-          const aCreatedAt = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const bCreatedAt = b.created_at ? new Date(b.created_at).getTime() : 0;
+          const aCreatedAt = a.created_at
+            ? new Date(a.created_at).getTime()
+            : 0;
+          const bCreatedAt = b.created_at
+            ? new Date(b.created_at).getTime()
+            : 0;
           return bCreatedAt - aCreatedAt;
-        case 'date-asc':
+        case "date-asc":
           // Ordenar por data (crescente), e se a data for igual, por created_at (crescente)
-          const dateDiffAsc = new Date(a.data).getTime() - new Date(b.data).getTime();
+          const dateDiffAsc =
+            new Date(a.data).getTime() - new Date(b.data).getTime();
           if (dateDiffAsc !== 0) return dateDiffAsc;
           // Se as datas forem iguais, ordenar por created_at (mais antiga primeiro)
-          const aCreatedAtAsc = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const bCreatedAtAsc = b.created_at ? new Date(b.created_at).getTime() : 0;
+          const aCreatedAtAsc = a.created_at
+            ? new Date(a.created_at).getTime()
+            : 0;
+          const bCreatedAtAsc = b.created_at
+            ? new Date(b.created_at).getTime()
+            : 0;
           return aCreatedAtAsc - bCreatedAtAsc;
-        case 'value-desc':
+        case "value-desc":
           return b.valor - a.valor;
-        case 'value-asc':
+        case "value-asc":
           return a.valor - b.valor;
-        case 'name-asc':
+        case "name-asc":
           return a.descricao.localeCompare(b.descricao);
-        case 'name-desc':
+        case "name-desc":
           return b.descricao.localeCompare(a.descricao);
         default:
           return 0;
@@ -144,20 +192,28 @@ export default function TransactionsScreen() {
 
   // Animações para itens da lista (após filteredAndSortedTransactions ser definido)
   useEffect(() => {
-    const anims = filteredAndSortedTransactions.map(() => new Animated.Value(0));
+    const anims = filteredAndSortedTransactions.map(
+      () => new Animated.Value(0),
+    );
     setTransactionAnims(anims);
-    
+
     anims.forEach((anim, index) => {
       Animated.timing(anim, {
         toValue: 1,
         duration: 400,
-        delay: 200 + (index * 50),
+        delay: 200 + index * 50,
         useNativeDriver: true,
       }).start();
     });
   }, [filteredAndSortedTransactions.length]);
 
-  const FilterButton = ({ type, label }: { type: FilterType; label: string }) => {
+  const FilterButton = ({
+    type,
+    label,
+  }: {
+    type: FilterType;
+    label: string;
+  }) => {
     const isActive = filter === type;
     return (
       <TouchableOpacity
@@ -167,8 +223,15 @@ export default function TransactionsScreen() {
           !isActive && styles.filterButtonInactive,
         ]}
         onPress={() => setFilter(type)}
-        activeOpacity={0.7}>
-        <Text style={[styles.filterText, isActive && styles.filterTextActive, !isActive && styles.filterTextInactive]}>
+        activeOpacity={0.7}
+      >
+        <Text
+          style={[
+            styles.filterText,
+            isActive && styles.filterTextActive,
+            !isActive && styles.filterTextInactive,
+          ]}
+        >
           {label}
         </Text>
       </TouchableOpacity>
@@ -179,9 +242,13 @@ export default function TransactionsScreen() {
     return (
       <View style={styles.container}>
         <AnimatedBackground />
-        <View style={[styles.loadingContainer, { paddingTop: insets.top + 16 }]}>
+        <View
+          style={[styles.loadingContainer, { paddingTop: insets.top + 16 }]}
+        >
           <ActivityIndicator size="large" color="#00b09b" />
-          <ThemedText style={styles.loadingText}>Carregando transações...</ThemedText>
+          <ThemedText style={styles.loadingText}>
+            Carregando transações...
+          </ThemedText>
         </View>
       </View>
     );
@@ -193,14 +260,18 @@ export default function TransactionsScreen() {
       <ScrollView
         ref={scrollRef}
         style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
-        showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 16 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <Animated.View style={headerStyle}>
           <ScreenHeader
             title="Transações"
-            subtitle={`${transactions.length} transaç${transactions.length !== 1 ? 'ões' : 'ão'} registrada${transactions.length !== 1 ? 's' : ''}`}
+            subtitle={`${transactions.length} transaç${transactions.length !== 1 ? "ões" : "ão"} registrada${transactions.length !== 1 ? "s" : ""}`}
             rightAction={{
-              icon: 'add',
+              icon: "add",
               onPress: () => setNewTransactionVisible(true),
             }}
             showCompanySelector={true}
@@ -210,46 +281,65 @@ export default function TransactionsScreen() {
         {/* Search Bar */}
         <Animated.View style={searchStyle}>
           <GlassContainer style={styles.searchContainer}>
-          <View style={styles.searchInputWrapper}>
-            <IconSymbol name="magnifyingglass" size={20} color="rgba(255, 255, 255, 0.6)" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Buscar por descrição, categoria ou conta..."
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                style={styles.clearButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <IconSymbol name="xmark.circle.fill" size={20} color="rgba(255, 255, 255, 0.6)" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </GlassContainer>
+            <View style={styles.searchInputWrapper}>
+              <IconSymbol
+                name="magnifyingglass"
+                size={20}
+                color="rgba(255, 255, 255, 0.6)"
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar por descrição, categoria ou conta..."
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery("")}
+                  style={styles.clearButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <IconSymbol
+                    name="xmark.circle.fill"
+                    size={20}
+                    color="rgba(255, 255, 255, 0.6)"
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          </GlassContainer>
         </Animated.View>
 
         {/* Sort and Filters Row */}
         <Animated.View style={[styles.controlsRow, filtersStyle]}>
           {/* Sort Selector */}
           <GlassContainer style={styles.sortContainer}>
-            <IconSymbol name="arrow.up.arrow.down" size={16} color="rgba(255, 255, 255, 0.6)" />
+            <IconSymbol
+              name="arrow.up.arrow.down"
+              size={16}
+              color="rgba(255, 255, 255, 0.6)"
+            />
             <View style={styles.sortPicker}>
               <TouchableOpacity
                 onPress={() => {
                   // Cicla entre as opções de ordenação
                   const sortOptions: SortType[] = [
-                    'date-desc', 'date-asc', 'value-desc', 'value-asc', 'name-asc', 'name-desc'
+                    "date-desc",
+                    "date-asc",
+                    "value-desc",
+                    "value-asc",
+                    "name-asc",
+                    "name-desc",
                   ];
                   const currentIndex = sortOptions.indexOf(sortBy);
                   const nextIndex = (currentIndex + 1) % sortOptions.length;
                   setSortBy(sortOptions[nextIndex]);
                 }}
-                style={styles.sortButton}>
+                style={styles.sortButton}
+              >
                 <Text style={styles.sortText}>{getSortLabel(sortBy)}</Text>
               </TouchableOpacity>
             </View>
@@ -266,73 +356,97 @@ export default function TransactionsScreen() {
         {/* Transactions List */}
         {filteredAndSortedTransactions.length === 0 ? (
           <GlassContainer style={styles.emptyState}>
-            <IconSymbol name="magnifyingglass" size={48} color="rgba(255, 255, 255, 0.5)" />
+            <IconSymbol
+              name="magnifyingglass"
+              size={48}
+              color="rgba(255, 255, 255, 0.5)"
+            />
             <ThemedText style={styles.emptyStateText}>
               Nenhuma transação encontrada
             </ThemedText>
             <ThemedText style={styles.emptyStateSubtext}>
-              {searchQuery ? 'Tente buscar com outros termos' : 'Não há transações para exibir'}
+              {searchQuery
+                ? "Tente buscar com outros termos"
+                : "Não há transações para exibir"}
             </ThemedText>
           </GlassContainer>
         ) : (
           <View style={styles.transactionsList}>
             {filteredAndSortedTransactions.map((transaction, index) => {
-              const tipo = transaction.tipo === 'receita' ? 'income' : 'expense';
-              const contaDescricao = transaction.contas_bancarias?.descricao || 'Sem conta';
-              
+              const tipo =
+                transaction.tipo === "receita" ? "income" : "expense";
+              const contaDescricao =
+                transaction.contas_bancarias?.descricao || "Sem conta";
+
               return (
                 <Animated.View
                   key={transaction.id}
-                  style={transactionAnims[index] ? {
-                    opacity: transactionAnims[index],
-                    transform: [
-                      {
-                        translateX: transactionAnims[index].interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [-20, 0],
-                        }),
-                      },
-                    ],
-                  } : { opacity: 0 }}>
+                  style={
+                    transactionAnims[index]
+                      ? {
+                          opacity: transactionAnims[index],
+                          transform: [
+                            {
+                              translateX: transactionAnims[index].interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [-20, 0],
+                              }),
+                            },
+                          ],
+                        }
+                      : { opacity: 0 }
+                  }
+                >
                   <GlassContainer style={styles.transactionCard}>
-                  <View style={styles.transactionHeader}>
-                    <View
-                      style={[
-                        styles.transactionIcon,
-                        {
-                          backgroundColor:
-                            tipo === 'income' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                        },
-                      ]}>
-                      <IconSymbol
-                        name={tipo === 'income' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'}
-                        size={20}
-                        color={tipo === 'income' ? '#10B981' : '#EF4444'}
-                      />
-                    </View>
-                    <View style={styles.transactionInfo}>
-                      <ThemedText type="defaultSemiBold" style={styles.transactionDescription}>
-                        {transaction.descricao}
-                      </ThemedText>
-                      <ThemedText style={styles.transactionMeta}>
-                        {transaction.categoria} • {contaDescricao}
-                      </ThemedText>
-                    </View>
-                    <View style={styles.transactionAmount}>
-                      <Text
+                    <View style={styles.transactionHeader}>
+                      <View
                         style={[
-                          styles.amountText,
+                          styles.transactionIcon,
                           {
-                            color: tipo === 'income' ? '#10B981' : '#EF4444',
+                            backgroundColor:
+                              tipo === "income"
+                                ? "rgba(16, 185, 129, 0.2)"
+                                : "rgba(239, 68, 68, 0.2)",
                           },
-                        ]}>
-                        {tipo === 'income' ? '+' : '-'}
-                        {formatCurrency(transaction.valor)}
-                      </Text>
-                      <ThemedText style={styles.transactionDate}>
-                        {formatDate(transaction.data)}
-                      </ThemedText>
-                    </View>
+                        ]}
+                      >
+                        <IconSymbol
+                          name={
+                            tipo === "income"
+                              ? "arrow.down.circle.fill"
+                              : "arrow.up.circle.fill"
+                          }
+                          size={20}
+                          color={tipo === "income" ? "#10B981" : "#EF4444"}
+                        />
+                      </View>
+                      <View style={styles.transactionInfo}>
+                        <ThemedText
+                          type="defaultSemiBold"
+                          style={styles.transactionDescription}
+                        >
+                          {transaction.descricao}
+                        </ThemedText>
+                        <ThemedText style={styles.transactionMeta}>
+                          {transaction.categoria} • {contaDescricao}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.transactionAmount}>
+                        <Text
+                          style={[
+                            styles.amountText,
+                            {
+                              color: tipo === "income" ? "#10B981" : "#EF4444",
+                            },
+                          ]}
+                        >
+                          {tipo === "income" ? "+" : "-"}
+                          {formatCurrency(transaction.valor)}
+                        </Text>
+                        <ThemedText style={styles.transactionDate}>
+                          {formatDate(transaction.data)}
+                        </ThemedText>
+                      </View>
                     </View>
                   </GlassContainer>
                 </Animated.View>
@@ -351,8 +465,9 @@ export default function TransactionsScreen() {
         onSuccess={async (transactionType) => {
           // Recarregar transações após criar
           await loadTransactions();
-          // Mostrar notificação de sucesso na página de transações com ícone do tipo
-          showSuccess('Transação criada com sucesso!', { transactionType });
+          // Mostrar notificação de sucesso padronizada
+          if (transactionType) showTransactionSuccess(transactionType);
+          else showSuccess("Transação criada com sucesso!");
         }}
       />
     </View>
@@ -361,12 +476,12 @@ export default function TransactionsScreen() {
 
 function getSortLabel(sortBy: SortType): string {
   const labels: Record<SortType, string> = {
-    'date-desc': 'Data ↓',
-    'date-asc': 'Data ↑',
-    'value-desc': 'Valor ↓',
-    'value-asc': 'Valor ↑',
-    'name-asc': 'Nome A-Z',
-    'name-desc': 'Nome Z-A',
+    "date-desc": "Data ↓",
+    "date-asc": "Data ↑",
+    "value-desc": "Valor ↓",
+    "value-asc": "Valor ↑",
+    "name-asc": "Nome A-Z",
+    "name-desc": "Nome Z-A",
   };
   return labels[sortBy];
 }
@@ -383,33 +498,33 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   loadingText: {
     marginTop: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
   },
   header: {
     marginBottom: 24,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   headerTextContainer: {
     flex: 1,
   },
   title: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   subtitle: {
     fontSize: 14,
     marginTop: 4,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
   },
   addButton: {
     padding: 8,
@@ -420,14 +535,14 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   searchInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     paddingVertical: 8,
   },
   clearButton: {
@@ -437,8 +552,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sortContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 12,
     gap: 8,
   },
@@ -450,11 +565,11 @@ const styles = StyleSheet.create({
   },
   sortText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   filters: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginBottom: 20,
   },
@@ -463,23 +578,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   filterButtonActive: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   filterButtonInactive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   filterText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   filterTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   filterTextInactive: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: "rgba(255, 255, 255, 0.7)",
   },
   transactionsList: {
     gap: 12,
@@ -488,55 +603,55 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   transactionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   transactionIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   transactionInfo: {
     flex: 1,
   },
   transactionDescription: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   transactionMeta: {
     fontSize: 12,
     marginTop: 4,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: "rgba(255, 255, 255, 0.6)",
   },
   transactionAmount: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   amountText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   transactionDate: {
     fontSize: 12,
     marginTop: 4,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: "rgba(255, 255, 255, 0.6)",
   },
   emptyState: {
     padding: 32,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 24,
   },
   emptyStateText: {
     marginTop: 16,
     fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   emptyStateSubtext: {
     marginTop: 8,
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
-    textAlign: 'center',
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
   },
 });

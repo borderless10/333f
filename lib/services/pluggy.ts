@@ -3,8 +3,7 @@
  * O Connect Token deve ser obtido via backend (Edge Function) por segurança.
  */
 
-const getSupabaseUrl = () =>
-  process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const getSupabaseUrl = () => process.env.EXPO_PUBLIC_SUPABASE_URL || "";
 
 export interface PluggyConnectResult {
   connectToken: string;
@@ -16,19 +15,21 @@ export interface PluggyConnectResult {
  * Obtém Connect Token (e opcionalmente redirectUrl) via Edge Function do Supabase.
  * Use redirectUrl para abrir no navegador: evita truncamento da URL longa no Intent/Android.
  */
-export async function getPluggyConnectToken(userId: string): Promise<PluggyConnectResult> {
+export async function getPluggyConnectToken(
+  userId: string,
+): Promise<PluggyConnectResult> {
   const baseUrl = getSupabaseUrl();
   if (!baseUrl) {
-    throw new Error('EXPO_PUBLIC_SUPABASE_URL não configurada.');
+    throw new Error("EXPO_PUBLIC_SUPABASE_URL não configurada.");
   }
 
-  const url = `${baseUrl.replace(/\/$/, '')}/functions/v1/pluggy-connect-token`;
-  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+  const url = `${baseUrl.replace(/\/$/, "")}/functions/v1/pluggy-connect-token`;
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
 
   const res = await fetch(url, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${anonKey}`,
     },
     body: JSON.stringify({ userId }),
@@ -36,17 +37,29 @@ export async function getPluggyConnectToken(userId: string): Promise<PluggyConne
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err?.error || err?.message || `Erro ao obter Connect Token (${res.status})`);
+    throw new Error(
+      err?.error ||
+        err?.message ||
+        `Erro ao obter Connect Token (${res.status})`,
+    );
   }
 
   const data = await res.json();
-  const connectToken = (data?.connectToken ?? data?.accessToken ?? data?.token ?? '').trim();
+  const connectToken = (
+    data?.connectToken ??
+    data?.accessToken ??
+    data?.token ??
+    ""
+  ).trim();
   if (!connectToken || connectToken.length < 10) {
-    const msg = data?.error || data?.message || 'Resposta da função sem connectToken.';
-    throw new Error(typeof msg === 'string' ? msg : 'Resposta da função sem connectToken.');
+    const msg =
+      data?.error || data?.message || "Resposta da função sem connectToken.";
+    throw new Error(
+      typeof msg === "string" ? msg : "Resposta da função sem connectToken.",
+    );
   }
 
-  const redirectUrl = (data?.redirectUrl ?? '').trim() || null;
+  const redirectUrl = (data?.redirectUrl ?? "").trim() || null;
   return { connectToken, redirectUrl: redirectUrl || null };
 }
 
@@ -55,7 +68,7 @@ export async function getPluggyConnectToken(userId: string): Promise<PluggyConne
  * O token é passado como parâmetro; o usuário conclui o fluxo na Pluggy.
  * Documentação: https://docs.pluggy.ai/docs/setup-pluggyconnect-widget-on-your-app
  */
-export const PLUGGY_CONNECT_BASE_URL = 'https://connect.pluggy.ai';
+export const PLUGGY_CONNECT_BASE_URL = "https://connect.pluggy.ai";
 
 /**
  * Monta a URL do Pluggy Connect com o connectToken (para abrir em WebView ou browser).
@@ -77,8 +90,8 @@ export interface PluggyTransaction {
   date: string; // ISO date
   balance?: number;
   category?: string;
-  type: 'DEBIT' | 'CREDIT';
-  status: 'PENDING' | 'POSTED';
+  type: "DEBIT" | "CREDIT";
+  status: "PENDING" | "POSTED";
   currencyCode: string;
   accountId: string;
 }
@@ -88,8 +101,8 @@ export interface PluggyTransaction {
  */
 export interface PluggyAccount {
   id: string;
-  type: 'BANK' | 'CREDIT';
-  subtype: 'CHECKING_ACCOUNT' | 'SAVINGS_ACCOUNT' | 'CREDIT_CARD';
+  type: "BANK" | "CREDIT";
+  subtype: "CHECKING_ACCOUNT" | "SAVINGS_ACCOUNT" | "CREDIT_CARD";
   number?: string;
   name: string;
   balance: number;
@@ -123,7 +136,7 @@ export async function getPluggyTransactions(
     from?: string; // YYYY-MM-DD
     to?: string; // YYYY-MM-DD
     pageSize?: number;
-  }
+  },
 ): Promise<{
   transactions: PluggyTransaction[];
   total: number;
@@ -132,16 +145,16 @@ export async function getPluggyTransactions(
 }> {
   const baseUrl = getSupabaseUrl();
   if (!baseUrl) {
-    throw new Error('EXPO_PUBLIC_SUPABASE_URL não configurada.');
+    throw new Error("EXPO_PUBLIC_SUPABASE_URL não configurada.");
   }
 
-  const url = `${baseUrl.replace(/\/$/, '')}/functions/v1/pluggy-transactions`;
-  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+  const url = `${baseUrl.replace(/\/$/, "")}/functions/v1/pluggy-transactions`;
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
 
   const res = await fetch(url, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${anonKey}`,
     },
     body: JSON.stringify({
@@ -155,7 +168,9 @@ export async function getPluggyTransactions(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err?.error || err?.message || `Erro ao buscar transações (${res.status})`);
+    throw new Error(
+      err?.error || err?.message || `Erro ao buscar transações (${res.status})`,
+    );
   }
 
   const data = await res.json();
@@ -177,16 +192,16 @@ export async function getPluggyAccounts(itemId: string): Promise<{
 }> {
   const baseUrl = getSupabaseUrl();
   if (!baseUrl) {
-    throw new Error('EXPO_PUBLIC_SUPABASE_URL não configurada.');
+    throw new Error("EXPO_PUBLIC_SUPABASE_URL não configurada.");
   }
 
-  const url = `${baseUrl.replace(/\/$/, '')}/functions/v1/pluggy-accounts`;
-  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+  const url = `${baseUrl.replace(/\/$/, "")}/functions/v1/pluggy-accounts`;
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
 
   const res = await fetch(url, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${anonKey}`,
     },
     body: JSON.stringify({ itemId }),
@@ -194,7 +209,9 @@ export async function getPluggyAccounts(itemId: string): Promise<{
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err?.error || err?.message || `Erro ao buscar contas (${res.status})`);
+    throw new Error(
+      err?.error || err?.message || `Erro ao buscar contas (${res.status})`,
+    );
   }
 
   const data = await res.json();
@@ -208,7 +225,12 @@ export async function getPluggyAccounts(itemId: string): Promise<{
  * Interface para resultado da verificação de status do item Pluggy
  */
 export interface PluggyItemStatusResult {
-  status: 'UPDATED' | 'UPDATING' | 'WAITING_USER_INPUT' | 'LOGIN_ERROR' | 'OUTDATED';
+  status:
+    | "UPDATED"
+    | "UPDATING"
+    | "WAITING_USER_INPUT"
+    | "LOGIN_ERROR"
+    | "OUTDATED";
   needsUpdate: boolean;
   renewed: boolean;
   needsUserAction: boolean;
@@ -223,20 +245,20 @@ export interface PluggyItemStatusResult {
  */
 export async function checkAndRenewPluggyItem(
   itemId: string,
-  autoRenew: boolean = true
+  autoRenew: boolean = true,
 ): Promise<PluggyItemStatusResult> {
   const baseUrl = getSupabaseUrl();
   if (!baseUrl) {
-    throw new Error('EXPO_PUBLIC_SUPABASE_URL não configurada.');
+    throw new Error("EXPO_PUBLIC_SUPABASE_URL não configurada.");
   }
 
-  const url = `${baseUrl.replace(/\/$/, '')}/functions/v1/pluggy-item-status`;
-  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+  const url = `${baseUrl.replace(/\/$/, "")}/functions/v1/pluggy-item-status`;
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
 
   const res = await fetch(url, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${anonKey}`,
     },
     body: JSON.stringify({ itemId, autoUpdate: autoRenew }),
@@ -244,16 +266,20 @@ export async function checkAndRenewPluggyItem(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err?.error || err?.message || `Erro ao verificar status (${res.status})`);
+    throw new Error(
+      err?.error || err?.message || `Erro ao verificar status (${res.status})`,
+    );
   }
 
   const data = await res.json();
-  
+
   return {
-    status: data.status?.status || 'OUTDATED',
+    status: data.status?.status || "OUTDATED",
     needsUpdate: data.needsUpdate || false,
     renewed: data.updated || false,
-    needsUserAction: data.status?.status === 'LOGIN_ERROR' || data.status?.status === 'WAITING_USER_INPUT',
+    needsUserAction:
+      data.status?.status === "LOGIN_ERROR" ||
+      data.status?.status === "WAITING_USER_INPUT",
     message: data.message,
     lastUpdatedAt: data.status?.lastUpdatedAt,
   };

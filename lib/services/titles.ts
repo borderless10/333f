@@ -1,5 +1,5 @@
-import { supabase } from '../supabase';
-import { criarTransacao } from './transactions';
+import { supabase } from "../supabase";
+import { criarTransacao } from "./transactions";
 
 export interface Title {
   id?: number;
@@ -12,8 +12,8 @@ export interface Title {
   valor: number;
   data_vencimento: string; // formato: YYYY-MM-DD
   data_pagamento?: string | null;
-  tipo: 'pagar' | 'receber';
-  status: 'pendente' | 'pago' | 'vencido';
+  tipo: "pagar" | "receber";
+  status: "pendente" | "pago" | "vencido";
   conta_bancaria_id?: number | null;
   created_at?: string;
   updated_at?: string;
@@ -29,23 +29,26 @@ export interface TitleWithAccount extends Title {
 /**
  * Calcula o status do título baseado nas datas
  */
-export function calcularStatus(dataVencimento: string, dataPagamento?: string | null): 'pendente' | 'pago' | 'vencido' {
-  if (dataPagamento) return 'pago';
-  
+export function calcularStatus(
+  dataVencimento: string,
+  dataPagamento?: string | null,
+): "pendente" | "pago" | "vencido" {
+  if (dataPagamento) return "pago";
+
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
-  
+
   const vencimento = new Date(dataVencimento);
   vencimento.setHours(0, 0, 0, 0);
-  
-  if (vencimento < hoje) return 'vencido';
-  
-  return 'pendente';
+
+  if (vencimento < hoje) return "vencido";
+
+  return "pendente";
 }
 
 export interface TitleFilters {
-  tipo?: 'pagar' | 'receber';
-  status?: 'pendente' | 'pago' | 'vencido';
+  tipo?: "pagar" | "receber";
+  status?: "pendente" | "pago" | "vencido";
   busca?: string;
 }
 
@@ -55,10 +58,10 @@ export interface TitleFilters {
 export async function buscarTitulos(
   userId: string,
   empresaId?: number | null,
-  filters?: TitleFilters
+  filters?: TitleFilters,
 ) {
   let query = supabase
-    .from('titulos')
+    .from("titulos")
     .select(
       `
       *,
@@ -66,33 +69,40 @@ export async function buscarTitulos(
         id,
         descricao
       )
-    `
+    `,
     )
-    .eq('codigo_empresa', userId)
-    .order('data_vencimento', { ascending: false });
+    .eq("codigo_empresa", userId)
+    .order("data_vencimento", { ascending: false });
+
+  if (empresaId !== undefined) {
+    query =
+      empresaId === null
+        ? query.is("empresa_id", null)
+        : query.eq("empresa_id", empresaId);
+  }
 
   // Filtro por tipo (pagar/receber)
   if (filters?.tipo) {
-    query = query.eq('tipo', filters.tipo);
+    query = query.eq("tipo", filters.tipo);
   }
 
   // Filtro por status
   if (filters?.status) {
-    query = query.eq('status', filters.status);
+    query = query.eq("status", filters.status);
   }
 
   // Filtro de busca (fornecedor/cliente ou descrição)
-  if (filters?.busca && filters.busca.trim() !== '') {
+  if (filters?.busca && filters.busca.trim() !== "") {
     const busca = filters.busca.trim();
     query = query.or(
-      `fornecedor_cliente.ilike.%${busca}%,descricao.ilike.%${busca}%`
+      `fornecedor_cliente.ilike.%${busca}%,descricao.ilike.%${busca}%`,
     );
   }
 
   const { data, error } = await query;
 
   if (error) {
-    console.error('Erro ao buscar títulos:', error);
+    console.error("Erro ao buscar títulos:", error);
     return { data: null, error };
   }
 
@@ -102,7 +112,9 @@ export async function buscarTitulos(
 /**
  * Cria um novo título
  */
-export async function criarTitulo(titulo: Omit<Title, 'id' | 'created_at' | 'updated_at' | 'status'>) {
+export async function criarTitulo(
+  titulo: Omit<Title, "id" | "created_at" | "updated_at" | "status">,
+) {
   // Calcula o status automaticamente
   const status = calcularStatus(titulo.data_vencimento, titulo.data_pagamento);
 
@@ -112,13 +124,13 @@ export async function criarTitulo(titulo: Omit<Title, 'id' | 'created_at' | 'upd
   };
 
   const { data, error } = await supabase
-    .from('titulos')
+    .from("titulos")
     .insert([tituloComStatus])
     .select()
     .single();
 
   if (error) {
-    console.error('Erro ao criar título:', error);
+    console.error("Erro ao criar título:", error);
     throw error;
   }
 
@@ -128,41 +140,49 @@ export async function criarTitulo(titulo: Omit<Title, 'id' | 'created_at' | 'upd
 /**
  * Atualiza um título existente
  */
-export async function atualizarTitulo(id: number, atualizacoes: Partial<Title>) {
+export async function atualizarTitulo(
+  id: number,
+  atualizacoes: Partial<Title>,
+) {
   // Se mudou a data de vencimento ou pagamento, recalcula o status
   let statusAtualizado = atualizacoes.status;
-  
-  if (atualizacoes.data_vencimento || atualizacoes.data_pagamento !== undefined) {
+
+  if (
+    atualizacoes.data_vencimento ||
+    atualizacoes.data_pagamento !== undefined
+  ) {
     // Busca o título atual para pegar os dados
     const { data: tituloAtual } = await supabase
-      .from('titulos')
-      .select('data_vencimento, data_pagamento')
-      .eq('id', id)
+      .from("titulos")
+      .select("data_vencimento, data_pagamento")
+      .eq("id", id)
       .single();
 
     if (tituloAtual) {
-      const dataVencimento = atualizacoes.data_vencimento || tituloAtual.data_vencimento;
-      const dataPagamento = atualizacoes.data_pagamento !== undefined 
-        ? atualizacoes.data_pagamento 
-        : tituloAtual.data_pagamento;
-      
+      const dataVencimento =
+        atualizacoes.data_vencimento || tituloAtual.data_vencimento;
+      const dataPagamento =
+        atualizacoes.data_pagamento !== undefined
+          ? atualizacoes.data_pagamento
+          : tituloAtual.data_pagamento;
+
       statusAtualizado = calcularStatus(dataVencimento, dataPagamento);
     }
   }
 
   const { data, error } = await supabase
-    .from('titulos')
-    .update({ 
-      ...atualizacoes, 
+    .from("titulos")
+    .update({
+      ...atualizacoes,
       status: statusAtualizado,
-      updated_at: new Date().toISOString() 
+      updated_at: new Date().toISOString(),
     })
-    .eq('id', id)
+    .eq("id", id)
     .select()
     .single();
 
   if (error) {
-    console.error('Erro ao atualizar título:', error);
+    console.error("Erro ao atualizar título:", error);
     throw error;
   }
 
@@ -173,13 +193,10 @@ export async function atualizarTitulo(id: number, atualizacoes: Partial<Title>) 
  * Deleta um título
  */
 export async function deletarTitulo(id: number) {
-  const { error } = await supabase
-    .from('titulos')
-    .delete()
-    .eq('id', id);
+  const { error } = await supabase.from("titulos").delete().eq("id", id);
 
   if (error) {
-    console.error('Erro ao deletar título:', error);
+    console.error("Erro ao deletar título:", error);
     throw error;
   }
 }
@@ -192,42 +209,44 @@ export async function marcarTituloComoPago(
   tituloId: number,
   dataPagamento?: string,
   contaBancariaId?: number,
-  empresaId?: number | null
+  empresaId?: number | null,
 ) {
   // Busca o título
   const { data: titulo, error: erroTitulo } = await supabase
-    .from('titulos')
-    .select('*')
-    .eq('id', tituloId)
+    .from("titulos")
+    .select("*")
+    .eq("id", tituloId)
     .single();
 
   if (erroTitulo || !titulo) {
-    throw new Error('Título não encontrado');
+    throw new Error("Título não encontrado");
   }
 
   // Define a data de pagamento (hoje se não fornecida)
-  const dataFinal = dataPagamento || new Date().toISOString().split('T')[0];
+  const dataFinal = dataPagamento || new Date().toISOString().split("T")[0];
 
   // Atualiza o título para status "pago"
   const { error: erroUpdate } = await supabase
-    .from('titulos')
+    .from("titulos")
     .update({
       data_pagamento: dataFinal,
-      status: 'pago',
+      status: "pago",
       conta_bancaria_id: contaBancariaId || titulo.conta_bancaria_id,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', tituloId);
+    .eq("id", tituloId);
 
   if (erroUpdate) {
     throw erroUpdate;
   }
 
   // Cria transação automaticamente
-  const tipoTransacao = titulo.tipo === 'pagar' ? 'despesa' : 'receita';
-  const categoriaTransacao = titulo.tipo === 'pagar' ? 'Títulos a Pagar' : 'Títulos a Receber';
-  const descricaoTransacao = titulo.descricao || 
-    `${titulo.tipo === 'pagar' ? 'Pagamento de' : 'Recebimento de'} ${titulo.fornecedor_cliente}`;
+  const tipoTransacao = titulo.tipo === "pagar" ? "despesa" : "receita";
+  const categoriaTransacao =
+    titulo.tipo === "pagar" ? "Títulos a Pagar" : "Títulos a Receber";
+  const descricaoTransacao =
+    titulo.descricao ||
+    `${titulo.tipo === "pagar" ? "Pagamento de" : "Recebimento de"} ${titulo.fornecedor_cliente}`;
 
   await criarTransacao({
     codigo_empresa: userId,
@@ -247,13 +266,13 @@ export async function marcarTituloComoPago(
 export async function desmarcarTituloComoPago(tituloId: number) {
   // Busca o título
   const { data: titulo, error: erroTitulo } = await supabase
-    .from('titulos')
-    .select('data_vencimento')
-    .eq('id', tituloId)
+    .from("titulos")
+    .select("data_vencimento")
+    .eq("id", tituloId)
     .single();
 
   if (erroTitulo || !titulo) {
-    throw new Error('Título não encontrado');
+    throw new Error("Título não encontrado");
   }
 
   // Calcula o novo status
@@ -261,13 +280,13 @@ export async function desmarcarTituloComoPago(tituloId: number) {
 
   // Atualiza o título
   const { error: erroUpdate } = await supabase
-    .from('titulos')
+    .from("titulos")
     .update({
       data_pagamento: null,
       status: novoStatus,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', tituloId);
+    .eq("id", tituloId);
 
   if (erroUpdate) {
     throw erroUpdate;

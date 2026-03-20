@@ -1,4 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useNotification } from "@/hooks/use-notification";
+import {
+  getIntegrationLogs,
+  type IntegrationLog,
+  type IntegrationOperationType,
+} from "@/lib/services/open-finance";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -7,21 +15,14 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AnimatedBackground } from './animated-background';
-import { GlassContainer } from './glass-container';
-import { ThemedText } from './themed-text';
-import { IconSymbol } from './ui/icon-symbol';
-import Toast from 'react-native-toast-message';
-import { toastConfig } from './NotificationToast';
-import { useAuth } from '@/contexts/AuthContext';
-import { useNotification } from '@/hooks/use-notification';
-import {
-  getIntegrationLogs,
-  type IntegrationLog,
-  type IntegrationOperationType,
-} from '@/lib/services/open-finance';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import { AnimatedBackground } from "./animated-background";
+import { GlassContainer } from "./glass-container";
+import { toastConfig } from "./NotificationToast";
+import { ThemedText } from "./themed-text";
+import { IconSymbol } from "./ui/icon-symbol";
 
 interface IntegrationLogsModalProps {
   visible: boolean;
@@ -29,14 +30,21 @@ interface IntegrationLogsModalProps {
   connectionId?: string | null;
 }
 
-export function IntegrationLogsModal({ visible, onClose, connectionId }: IntegrationLogsModalProps) {
+export function IntegrationLogsModal({
+  visible,
+  onClose,
+  connectionId,
+}: IntegrationLogsModalProps) {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
+  const { selectedCompany } = useCompany();
   const { showError } = useNotification();
 
   const [logs, setLogs] = useState<IntegrationLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterType, setFilterType] = useState<IntegrationOperationType | 'all'>('all');
+  const [filterType, setFilterType] = useState<
+    IntegrationOperationType | "all"
+  >("all");
 
   useEffect(() => {
     if (visible && userId) {
@@ -44,39 +52,49 @@ export function IntegrationLogsModal({ visible, onClose, connectionId }: Integra
     } else {
       // Resetar ao fechar
       setLogs([]);
-      setFilterType('all');
+      setFilterType("all");
       setLoading(true);
     }
-  }, [visible, userId, connectionId]);
+  }, [visible, userId, connectionId, selectedCompany]);
 
   useEffect(() => {
     if (visible && userId) {
       loadLogs();
     }
-  }, [filterType]);
+  }, [filterType, selectedCompany]);
 
   const loadLogs = async () => {
     if (!userId || !visible) return;
 
     try {
       setLoading(true);
-      const data = await getIntegrationLogs(userId, {
-        connectionId: connectionId || undefined,
-        operationType: filterType === 'all' ? undefined : filterType,
-        limit: 100,
-      });
+      const data = await getIntegrationLogs(
+        userId,
+        selectedCompany?.id ?? null,
+        {
+          connectionId: connectionId || undefined,
+          operationType: filterType === "all" ? undefined : filterType,
+          limit: 100,
+        },
+      );
       // Verificar se ainda está visível antes de atualizar estado
       if (visible) {
         setLogs(data || []);
       }
     } catch (error: any) {
-      console.error('Erro ao carregar logs:', error);
+      console.error("Erro ao carregar logs:", error);
       if (visible) {
         // Verificar se é erro de tabela não encontrada
-        if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.message?.includes('schema cache')) {
-          showError('Tabela de logs não encontrada. Execute o script SQL de setup.');
+        if (
+          error?.code === "PGRST116" ||
+          error?.message?.includes("does not exist") ||
+          error?.message?.includes("schema cache")
+        ) {
+          showError(
+            "Tabela de logs não encontrada. Execute o script SQL de setup.",
+          );
         } else {
-          showError('Não foi possível carregar os logs');
+          showError("Não foi possível carregar os logs");
         }
         setLogs([]);
       }
@@ -89,39 +107,39 @@ export function IntegrationLogsModal({ visible, onClose, connectionId }: Integra
 
   const getOperationLabel = (type: IntegrationOperationType): string => {
     const labels: Record<IntegrationOperationType, string> = {
-      consent_created: 'Consentimento Criado',
-      consent_renewed: 'Consentimento Renovado',
-      consent_revoked: 'Consentimento Revogado',
-      sync_transactions: 'Sincronizar Transações',
-      sync_balance: 'Sincronizar Saldo',
-      token_refresh: 'Renovar Token',
-      error: 'Erro',
+      consent_created: "Consentimento Criado",
+      consent_renewed: "Consentimento Renovado",
+      consent_revoked: "Consentimento Revogado",
+      sync_transactions: "Sincronizar Transações",
+      sync_balance: "Sincronizar Saldo",
+      token_refresh: "Renovar Token",
+      error: "Erro",
     };
     return labels[type] || type;
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'success':
-        return '#10B981';
-      case 'error':
-        return '#EF4444';
-      case 'pending':
-        return '#FBBF24';
+      case "success":
+        return "#10B981";
+      case "error":
+        return "#EF4444";
+      case "pending":
+        return "#FBBF24";
       default:
-        return '#9CA3AF';
+        return "#9CA3AF";
     }
   };
 
-  const operationTypes: (IntegrationOperationType | 'all')[] = [
-    'all',
-    'consent_created',
-    'consent_renewed',
-    'consent_revoked',
-    'sync_transactions',
-    'sync_balance',
-    'token_refresh',
-    'error',
+  const operationTypes: (IntegrationOperationType | "all")[] = [
+    "all",
+    "consent_created",
+    "consent_renewed",
+    "consent_revoked",
+    "sync_transactions",
+    "sync_balance",
+    "token_refresh",
+    "error",
   ];
 
   return (
@@ -129,7 +147,8 @@ export function IntegrationLogsModal({ visible, onClose, connectionId }: Integra
       visible={visible}
       animationType="slide"
       transparent={true}
-      onRequestClose={onClose}>
+      onRequestClose={onClose}
+    >
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
           <AnimatedBackground />
@@ -147,19 +166,25 @@ export function IntegrationLogsModal({ visible, onClose, connectionId }: Integra
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.filtersContainer}
-            contentContainerStyle={styles.filters}>
+            contentContainerStyle={styles.filters}
+          >
             {operationTypes.map((type) => (
               <TouchableOpacity
                 key={type}
-                style={[styles.filterButton, filterType === type && styles.filterButtonActive]}
+                style={[
+                  styles.filterButton,
+                  filterType === type && styles.filterButtonActive,
+                ]}
                 onPress={() => setFilterType(type)}
-                activeOpacity={0.7}>
+                activeOpacity={0.7}
+              >
                 <Text
                   style={[
                     styles.filterText,
                     filterType === type && styles.filterTextActive,
-                  ]}>
-                  {type === 'all' ? 'Todos' : getOperationLabel(type)}
+                  ]}
+                >
+                  {type === "all" ? "Todos" : getOperationLabel(type)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -169,18 +194,27 @@ export function IntegrationLogsModal({ visible, onClose, connectionId }: Integra
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#00b09b" />
-              <ThemedText style={styles.loadingText}>Carregando logs...</ThemedText>
+              <ThemedText style={styles.loadingText}>
+                Carregando logs...
+              </ThemedText>
             </View>
           ) : logs.length === 0 ? (
             <GlassContainer style={styles.emptyState}>
-              <IconSymbol name="list.bullet" size={48} color="rgba(255, 255, 255, 0.5)" />
-              <ThemedText style={styles.emptyStateText}>Nenhum log encontrado</ThemedText>
+              <IconSymbol
+                name="list.bullet"
+                size={48}
+                color="rgba(255, 255, 255, 0.5)"
+              />
+              <ThemedText style={styles.emptyStateText}>
+                Nenhum log encontrado
+              </ThemedText>
             </GlassContainer>
           ) : (
             <ScrollView
               style={styles.logsList}
               contentContainerStyle={styles.logsListContent}
-              showsVerticalScrollIndicator={false}>
+              showsVerticalScrollIndicator={false}
+            >
               {logs.map((log) => (
                 <GlassContainer key={log.id} style={styles.logCard}>
                   <View style={styles.logHeader}>
@@ -188,8 +222,11 @@ export function IntegrationLogsModal({ visible, onClose, connectionId }: Integra
                       <View
                         style={[
                           styles.statusIndicator,
-                          { backgroundColor: `${getStatusColor(log.status)}20` },
-                        ]}>
+                          {
+                            backgroundColor: `${getStatusColor(log.status)}20`,
+                          },
+                        ]}
+                      >
                         <View
                           style={[
                             styles.statusDot,
@@ -198,11 +235,14 @@ export function IntegrationLogsModal({ visible, onClose, connectionId }: Integra
                         />
                       </View>
                       <View style={styles.logInfo}>
-                        <ThemedText type="defaultSemiBold" style={styles.logOperation}>
+                        <ThemedText
+                          type="defaultSemiBold"
+                          style={styles.logOperation}
+                        >
                           {getOperationLabel(log.operation_type)}
                         </ThemedText>
                         <ThemedText style={styles.logDate}>
-                          {new Date(log.created_at).toLocaleString('pt-BR')}
+                          {new Date(log.created_at).toLocaleString("pt-BR")}
                         </ThemedText>
                       </View>
                     </View>
@@ -210,22 +250,35 @@ export function IntegrationLogsModal({ visible, onClose, connectionId }: Integra
                       style={[
                         styles.statusBadge,
                         { backgroundColor: `${getStatusColor(log.status)}20` },
-                      ]}>
-                      <Text style={[styles.statusText, { color: getStatusColor(log.status) }]}>
-                        {log.status === 'success' ? 'Sucesso' :
-                         log.status === 'error' ? 'Erro' : 'Pendente'}
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusText,
+                          { color: getStatusColor(log.status) },
+                        ]}
+                      >
+                        {log.status === "success"
+                          ? "Sucesso"
+                          : log.status === "error"
+                            ? "Erro"
+                            : "Pendente"}
                       </Text>
                     </View>
                   </View>
 
                   {log.message && (
-                    <ThemedText style={styles.logMessage}>{log.message}</ThemedText>
+                    <ThemedText style={styles.logMessage}>
+                      {log.message}
+                    </ThemedText>
                   )}
 
                   {log.error_message && (
                     <View style={styles.errorContainer}>
                       <ThemedText style={styles.errorTitle}>Erro:</ThemedText>
-                      <ThemedText style={styles.errorMessage}>{log.error_message}</ThemedText>
+                      <ThemedText style={styles.errorMessage}>
+                        {log.error_message}
+                      </ThemedText>
                     </View>
                   )}
 
@@ -250,22 +303,22 @@ export function IntegrationLogsModal({ visible, onClose, connectionId }: Integra
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
   modalContent: {
     flex: 1,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 24,
   },
   closeButton: {
@@ -276,7 +329,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
   filters: {
     gap: 8,
@@ -285,39 +338,39 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   filterButtonActive: {
-    backgroundColor: '#00b09b',
+    backgroundColor: "#00b09b",
   },
   filterText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: "600",
+    color: "rgba(255, 255, 255, 0.7)",
   },
   filterTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 32,
   },
   loadingText: {
     marginTop: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
   },
   emptyState: {
     padding: 32,
-    alignItems: 'center',
+    alignItems: "center",
     margin: 16,
   },
   emptyStateText: {
     marginTop: 16,
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: "rgba(255, 255, 255, 0.6)",
   },
   logsList: {
     flex: 1,
@@ -330,14 +383,14 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   logHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 8,
   },
   logLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
     gap: 12,
   },
@@ -345,8 +398,8 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   statusDot: {
     width: 12,
@@ -357,13 +410,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logOperation: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
   },
   logDate: {
     fontSize: 12,
     marginTop: 2,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: "rgba(255, 255, 255, 0.6)",
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -372,40 +425,40 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   logMessage: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
     marginTop: 8,
   },
   errorContainer: {
     marginTop: 12,
     padding: 12,
     borderRadius: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: "rgba(239, 68, 68, 0.3)",
   },
   errorTitle: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#EF4444',
+    fontWeight: "600",
+    color: "#EF4444",
     marginBottom: 4,
   },
   errorMessage: {
     fontSize: 12,
-    color: '#EF4444',
+    color: "#EF4444",
   },
   metadataContainer: {
     marginTop: 8,
     padding: 8,
     borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
   metadataText: {
     fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontFamily: 'monospace',
+    color: "rgba(255, 255, 255, 0.6)",
+    fontFamily: "monospace",
   },
 });

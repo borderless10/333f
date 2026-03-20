@@ -117,7 +117,7 @@ export default function TitlesScreen() {
       setLoading(true);
       const [titlesResult, contasResult] = await Promise.all([
         buscarTitulos(userId, selectedCompany?.id ?? null),
-        buscarContas(userId),
+        buscarContas(userId, selectedCompany?.id ?? null),
       ]);
 
       if (titlesResult.error) {
@@ -767,6 +767,8 @@ export default function TitlesScreen() {
                   ? styles.filterTextActive
                   : styles.filterTextInactive,
               ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
               Todos
             </Text>
@@ -786,8 +788,10 @@ export default function TitlesScreen() {
                   ? styles.filterTextActive
                   : styles.filterTextInactive,
               ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
-              Pendente
+              Pendentes
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -805,6 +809,8 @@ export default function TitlesScreen() {
                   ? styles.filterTextActive
                   : styles.filterTextInactive,
               ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
               Pago
             </Text>
@@ -824,6 +830,8 @@ export default function TitlesScreen() {
                   ? styles.filterTextActive
                   : styles.filterTextInactive,
               ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
               Vencido
             </Text>
@@ -1442,13 +1450,13 @@ const styles = StyleSheet.create({
   },
   filters: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
     marginBottom: 12,
   },
   filterButton: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     borderRadius: 12,
     alignItems: "center",
     backgroundColor: "rgba(255, 255, 255, 0.1)",
