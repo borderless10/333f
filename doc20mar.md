@@ -7,7 +7,7 @@
 
 - 🔓 Usuário é desconectado localmente mesmo com backend instável.
 - 🧰 Evita UI travada ao clicar em Logout.
-
+l
 11 - Estabilização do Login (timeouts e background)
 🔹 Alterei `signIn` no `AuthContext` para usar timeout (12s) e carregamento de role em background (não bloqueante).
 🔹 Atualizei `app/login.tsx` para chamar `signIn` do contexto e tratar mensagens específicas de timeout/rede.

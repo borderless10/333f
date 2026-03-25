@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "333f",
+    "scheme": "app333f",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -47,9 +47,14 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "a5c71d0a-16b3-4b23-806f-aa951ced3c71"
+        "projectId": "791c048a-079a-4a9b-a1df-84b934fd810c"
       }
     },
-    "owner": "artur2005"
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/791c048a-079a-4a9b-a1df-84b934fd810c"
+    }
   }
 }

@@ -39,12 +39,21 @@ function RootLayoutNav() {
     if (loading) return; // Aguarda carregamento inicial
 
     const inAuthGroup = segments[0] === "(tabs)";
+    const inResetFlow = segments[0] === "reset-password";
+    const inForgotFlow = segments[0] === "forgot-password";
+    const inLoginFlow = segments[0] === "login";
 
-    if (!user && inAuthGroup) {
-      // Se não está autenticado e está tentando acessar tabs, redireciona para login
+    // Se está no fluxo de reset, não redirecionar (permite completar o fluxo sem autenticação prévia)
+    if (inResetFlow || inForgotFlow) {
+      return;
+    }
+
+    // Se não está autenticado e não está em login/forgot-password, ir para login
+    if (!user && !inLoginFlow && inAuthGroup) {
       router.replace("/login");
-    } else if (user && !inAuthGroup) {
-      // Se está autenticado e não está em tabs, redireciona para tabs
+    }
+    // Se está autenticado e não está em tabs, ir para tabs (inclui quando está na tela de login)
+    else if (user && !inAuthGroup) {
       router.replace("/(tabs)");
     }
   }, [user, segments, loading]);
@@ -69,6 +78,11 @@ function RootLayoutNav() {
     <Stack>
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+      <Stack.Screen name="reset-password" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="reset-password-web"
+        options={{ headerShown: false }}
+      />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="modal"
